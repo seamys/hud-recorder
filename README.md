@@ -44,8 +44,11 @@ recorded, so the preview is exactly what ends up in the file.
   file format, camera mirroring and framing; a switch for every HUD element; accent, text and
   recording colours, opacity and typeface; units; caption size and timing.
 - **Environment panel**: location, weather, humidity, wind, air quality, sunrise and sunset for a
-  city you choose.
-- **News ticker**: headlines from any RSS or Atom feed, rotating at the top of the frame.
+  city you choose. Each row can be switched off, and a name of your choice can replace the city
+  on screen.
+- **News ticker**: headlines rotating at the top of the frame, from built-in sources or up to
+  five RSS or Atom feeds of your own, mixed together. The number of headlines and the time per
+  headline are adjustable.
 - **Automatic log keeping**: files are numbered and dated (`log-007_2026-11-15_1632.mp4`), and
   the HUD shows "Day N" counted from your first log.
 - **English and Simplified Chinese** interface and HUD, switchable in settings.
@@ -96,14 +99,14 @@ then starts the app. On macOS, the system asks for camera and microphone access 
    preview immediately. Recording options are locked while a recording is running.
 3. Press the round button to start recording and again to stop.
 
-Recordings are saved to `Videos\HUD-Logs` on Windows and `Movies/HUD-Logs` on macOS. The folder
-icon in the bar opens it.
+Recordings are saved to `Videos\HUD-Logs` on Windows and `Movies/HUD-Logs` on macOS unless you
+choose another folder under **Settings → Recording**. The folder icon in the bar opens it.
 
 ### Where settings are stored
 
 | What | Where |
 | --- | --- |
-| Name, topic, city, feed URL, log counter and log list | `index.json` in the `HUD-Logs` folder |
+| Name, topic, city, feeds, output folder, log counter and log list | `index.json` in the app's data folder (`%APPDATA%\hud-recorder` on Windows) |
 | All other settings, plus the chosen camera, microphone and language | The app's local storage |
 
 Delete `index.json` to reset the log counter and the day counter.

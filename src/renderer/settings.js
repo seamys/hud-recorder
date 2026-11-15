@@ -32,6 +32,11 @@
     'hud.audio': true,
     'hud.spectrum': true,
     'hud.env': true,
+    'hud.envLocation': true,
+    'hud.envWeather': true,
+    'hud.envWind': true,
+    'hud.envAir': true,
+    'hud.envSun': true,
     'hud.news': true,
     'hud.speaker': true,
     'hud.faceFrame': true,
@@ -48,10 +53,15 @@
     'look.shadow': true,
     'look.font': 'mono',
 
+    'general.theme': 'light',
+
     'info.city': '',
     'info.feed': '',
+    'info.label': '',
     'info.units': 'metric',
+    'info.preset': 'custom',
     'info.newsSeconds': 8,
+    'info.newsMax': 12,
 
     'speech.face': false,
     'speech.hands': false,
@@ -67,6 +77,16 @@
   const REC_COLORS = ['#FF8A4C', '#FF5A5A', '#FFC857'];
   const TEXT_COLORS = ['#E8F1F2', '#FFFFFF', '#FFE9C7', '#C9F7E0'];
 
+  // Ready-made news sources. Choosing one fills in the feed box; "custom" leaves it alone.
+  const NEWS_PRESETS = [
+    { id: 'custom', k: 'set.presetCustom' },
+    { id: 'off', k: 'set.presetOff', url: '' },
+    { id: 'bbc-zh', text: 'BBC 中文', url: 'https://feeds.bbci.co.uk/zhongwen/simp/rss.xml' },
+    { id: 'bbc-world', text: 'BBC World', url: 'https://feeds.bbci.co.uk/news/world/rss.xml' },
+    { id: 'bbc-tech', text: 'BBC Technology', url: 'https://feeds.bbci.co.uk/news/technology/rss.xml' },
+    { id: 'hn', text: 'Hacker News', url: 'https://hnrss.org/frontpage' }
+  ];
+
   const toggle = (key, label, extra) => Object.assign({ type: 'toggle', key, label }, extra);
 
   const SECTIONS = [
@@ -80,6 +100,11 @@
     {
       id: 'video',
       items: [
+        { type: 'value', id: 'outDir', label: 'set.outDir' },
+        { type: 'buttons', lock: true, buttons: [
+          { action: 'chooseDir', label: 'set.choose' },
+          { action: 'resetDir', label: 'set.useDefault' },
+          { action: 'openDir', label: 'set.reveal' }] },
         { type: 'select', key: 'video.resolution', label: 'set.resolution', lock: true, options: [
           { v: '720p', text: '720p · 1280 × 720' },
           { v: '1080p', text: '1080p · 1920 × 1080' },
@@ -118,6 +143,11 @@
         toggle('hud.audio', 'set.audioPanel'),
         toggle('hud.spectrum', 'set.spectrum'),
         toggle('hud.env', 'set.env'),
+        toggle('hud.envLocation', 'set.envLocation', { sub: true }),
+        toggle('hud.envWeather', 'set.envWeather', { sub: true }),
+        toggle('hud.envWind', 'set.envWind', { sub: true }),
+        toggle('hud.envAir', 'set.envAir', { sub: true }),
+        toggle('hud.envSun', 'set.envSun', { sub: true }),
         toggle('hud.news', 'set.news'),
         { type: 'group', label: 'set.groupSpeech' },
         toggle('hud.speaker', 'set.speaker'),
@@ -143,10 +173,15 @@
     {
       id: 'info',
       items: [
-        { type: 'text', key: 'info.city', label: 'ui.city', ph: 'ui.cityPh' },
+        { type: 'group', label: 'set.groupLocation' },
+        { type: 'text', key: 'info.city', label: 'ui.city', ph: 'ui.cityPh', hint: 'set.cityHint' },
+        { type: 'text', key: 'info.label', label: 'set.label', ph: 'set.labelPh', live: true, hint: 'set.labelHint' },
         { type: 'select', key: 'info.units', label: 'set.units', options: [
           { v: 'metric', k: 'set.metric' }, { v: 'imperial', k: 'set.imperial' }] },
-        { type: 'text', key: 'info.feed', label: 'ui.rss', ph: 'ui.rssPh' },
+        { type: 'group', label: 'set.groupNews' },
+        { type: 'select', key: 'info.preset', label: 'set.preset', options: NEWS_PRESETS.map((p) => (p.k ? { v: p.id, k: p.k } : { v: p.id, text: p.text })) },
+        { type: 'textarea', key: 'info.feed', label: 'ui.rss', ph: 'ui.rssPh', hint: 'set.feedHint' },
+        { type: 'range', key: 'info.newsMax', label: 'set.newsMax', min: 3, max: 30, step: 1, unit: '' },
         { type: 'range', key: 'info.newsSeconds', label: 'set.newsSeconds', min: 4, max: 20, step: 1, unit: ' s' },
         { type: 'note', label: 'ui.hint' }
       ]
@@ -171,6 +206,8 @@
       items: [
         { type: 'select', id: 'lang', label: 'ui.language', options: [
           { v: 'en', text: 'English' }, { v: 'zh-CN', text: '简体中文' }] },
+        { type: 'select', key: 'general.theme', label: 'set.theme', options: [
+          { v: 'light', k: 'set.themeLight' }, { v: 'dark', k: 'set.themeDark' }] },
         { type: 'button', action: 'openDir', label: 'ui.openFolder' },
         { type: 'button', action: 'openLogs', label: 'ui.openLogs' },
         { type: 'button', action: 'reset', label: 'set.reset', lock: true, hint: 'set.resetHint' }
@@ -256,10 +293,33 @@
 
     const wrap = el('div', 'item');
     const row = el('div', 'row' + (item.sub ? ' sub' : '') + (item.strong ? ' strong' : '') +
-      (item.type === 'text' || item.type === 'color' || item.wide ? ' stack' : ''));
+      (item.type === 'text' || item.type === 'textarea' || item.type === 'color' || item.wide ? ' stack' : ''));
     wrap.appendChild(row);
     const id = item.id || 'opt' + (++uid);
     let control;
+
+    if (item.type === 'buttons') {
+      row.classList.add('buttons');
+      item.buttons.forEach((b) => {
+        const btn = el('button', 'btn');
+        btn.type = 'button';
+        btn.dataset.i18n = b.label;
+        btn.addEventListener('click', () => actionListeners.forEach((fn) => fn(b.action)));
+        if (item.lock && b.action !== 'openDir') locked.push(btn);
+        row.appendChild(btn);
+      });
+      return wrap;
+    }
+    if (item.type === 'value') {
+      row.classList.add('stack');
+      const label = el('div', 'label');
+      label.dataset.i18n = item.label;
+      const value = el('div', 'value');
+      value.id = item.id;
+      row.appendChild(label);
+      row.appendChild(value);
+      return wrap;
+    }
 
     if (item.type === 'button') {
       control = el('button', 'btn');
@@ -309,6 +369,15 @@
         control.value = get(item.key) || '';
         if (item.ph) control.dataset.i18nPh = item.ph;
         control.addEventListener(item.live ? 'input' : 'change', () => set(item.key, control.value));
+        controls[item.key] = (v) => { control.value = v || ''; };
+        row.appendChild(control);
+      } else if (item.type === 'textarea') {
+        control = el('textarea');
+        control.rows = 3;
+        control.spellcheck = false;
+        control.value = get(item.key) || '';
+        if (item.ph) control.dataset.i18nPh = item.ph;
+        control.addEventListener('change', () => set(item.key, control.value));
         controls[item.key] = (v) => { control.value = v || ''; };
         row.appendChild(control);
       } else if (item.type === 'color') {
@@ -379,7 +448,7 @@
   }
 
   window.settings = {
-    get, set, sync, reset, build, setLocked,
+    get, set, sync, reset, build, setLocked, NEWS_PRESETS,
     onChange: (fn) => changeListeners.push(fn),
     onAction: (fn) => actionListeners.push(fn)
   };

@@ -2,7 +2,7 @@
 
 // Main process: window, file output, log numbering, system stats, weather and news.
 
-const { app, BrowserWindow, Menu, ipcMain, session, shell, systemPreferences, utilityProcess } = require('electron');
+const { app, BrowserWindow, Menu, dialog, ipcMain, session, shell, systemPreferences, utilityProcess } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { execFile } = require('child_process');
@@ -12,6 +12,10 @@ const { NVIDIA_SMI_ARGS, parseNvidiaSmi } = require('./lib/gpu');
 const { createLogger } = require('./lib/logger');
 const { formatChapters, formatSrt } = require('./lib/sidecar');
 
+const TITLE_BAR = {
+  light: { color: '#F8F8F8', symbolColor: '#3B3B3B' },
+  dark: { color: '#1F1F1F', symbolColor: '#CCCCCC' }
+};
 const REFRESH_MS = 10 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 15000;
 const ASR_MODELS = { fast: 'Xenova/whisper-base', accurate: 'Xenova/whisper-small' };
@@ -33,21 +37,39 @@ process.on('uncaughtException', (err) => log.error('uncaughtException', err));
 process.on('unhandledRejection', (err) => log.error('unhandledRejection', err));
 
 // ---------- storage ----------
+//
+// The index (log counter, log list, name, topic, city, feeds, chosen output folder) lives in the
+// app's data folder, so it stays put when the recordings folder is moved. Recordings and their
+// sidecar files go to the output folder, which the user can change.
 
-const outDir = () => path.join(app.getPath('videos'), 'HUD-Logs');
-const indexPath = () => path.join(outDir(), 'index.json');
+const defaultOutDir = () => path.join(app.getPath('videos'), 'HUD-Logs');
+const indexPath = () => path.join(app.getPath('userData'), 'index.json');
+const legacyIndexPath = () => path.join(defaultOutDir(), 'index.json');
 
 function readIndex() {
   try {
     return JSON.parse(fs.readFileSync(indexPath(), 'utf8'));
   } catch (e) {
-    return { firstDate: null, count: 0, name: '', topic: '', logs: [] };
+    // Versions up to 0.4.0 kept the index next to the recordings; pick it up from there once.
+    try {
+      const ix = JSON.parse(fs.readFileSync(legacyIndexPath(), 'utf8'));
+      writeIndex(ix);
+      return ix;
+    } catch (e2) {
+      return { firstDate: null, count: 0, name: '', topic: '', logs: [] };
+    }
   }
 }
 
 function writeIndex(ix) {
-  fs.mkdirSync(outDir(), { recursive: true });
+  fs.mkdirSync(path.dirname(indexPath()), { recursive: true });
   fs.writeFileSync(indexPath(), JSON.stringify(ix, null, 2));
+}
+
+/** Folder recordings are saved to: the user's choice, or Videos/HUD-Logs. */
+function outDir() {
+  const chosen = readIndex().outDir;
+  return typeof chosen === 'string' && chosen.trim() ? chosen : defaultOutDir();
 }
 
 function defaultFeed() {
@@ -139,23 +161,47 @@ async function refreshWeather() {
   weatherRetry = null;
 }
 
+const MAX_FEEDS = 5;
+const MAX_HEADLINES = 40;
+
+/** The feed setting holds one URL per line (or separated by spaces). */
+function feedList(value) {
+  return String(value || '').split(/\s+/).map((u) => u.trim()).filter(Boolean).slice(0, MAX_FEEDS);
+}
+
+async function fetchTitles(url) {
+  const r = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return parseFeedTitles(await r.text(), 20);
+}
+
 async function refreshNews() {
-  const url = feedUrl(readIndex());
-  if (!url) {
+  const urls = feedList(feedUrl(readIndex()));
+  if (!urls.length) {
     env.news = [];
     env.newsError = null;
     return;
   }
-  try {
-    const r = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    env.news = parseFeedTitles(await r.text());
-    env.newsError = env.news.length ? null : 'NO_TITLES';
-  } catch (e) {
-    env.news = [];
-    env.newsError = e.message;
-    log.warn('news refresh failed:', e.message);
+  const results = await Promise.allSettled(urls.map(fetchTitles));
+  const lists = [];
+  let firstError = null;
+  results.forEach((res, i) => {
+    if (res.status === 'fulfilled') lists.push(res.value);
+    else {
+      firstError = firstError || res.reason.message;
+      log.warn('news refresh failed for feed ' + (i + 1) + ':', res.reason.message);
+    }
+  });
+  // Interleave the feeds so that every source gets airtime, and drop repeated headlines.
+  const merged = [];
+  const seen = new Set();
+  for (let i = 0; merged.length < MAX_HEADLINES && lists.some((l) => i < l.length); i++) {
+    for (const l of lists) {
+      if (i < l.length && !seen.has(l[i]) && merged.length < MAX_HEADLINES) { seen.add(l[i]); merged.push(l[i]); }
+    }
   }
+  env.news = merged;
+  env.newsError = merged.length ? null : (firstError || 'NO_TITLES');
 }
 
 // ---------- IPC ----------
@@ -291,15 +337,15 @@ ipcMain.handle('env:setCity', async (e, name, lang) => {
   }
 });
 
-ipcMain.handle('env:setFeed', async (e, url) => {
-  url = String(url || '').trim();
-  if (url) {
+ipcMain.handle('env:setFeed', async (e, value) => {
+  const urls = feedList(value);
+  for (const url of urls) {
     let u;
     try { u = new URL(url); } catch (err) { return { ok: false, error: 'BAD_URL' }; }
     if (u.protocol !== 'http:' && u.protocol !== 'https:') return { ok: false, error: 'BAD_PROTOCOL' };
   }
   const ix = readIndex();
-  ix.rss = url;
+  ix.rss = urls.join('\n');
   writeIndex(ix);
   await refreshNews();
   return { ok: !env.newsError, error: env.newsError, count: env.news.length };
@@ -405,6 +451,50 @@ ipcMain.handle('hand:model', () => loadModel('hand_landmarker.task', HAND_MODEL_
 
 ipcMain.handle('open:logs', () => shell.openPath(log.dir));
 
+// Let the user pick where recordings are saved. Refused while a recording is being written.
+ipcMain.handle('out:choose', async () => {
+  if (out) return { ok: false, error: 'RECORDING' };
+  const res = await dialog.showOpenDialog(win, {
+    defaultPath: outDir(),
+    properties: ['openDirectory', 'createDirectory']
+  });
+  if (res.canceled || !res.filePaths[0]) return { ok: false, canceled: true };
+  const dir = res.filePaths[0];
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.accessSync(dir, fs.constants.W_OK);
+  } catch (err) {
+    log.warn('chosen output folder is not writable:', dir, err.message);
+    return { ok: false, error: 'NOT_WRITABLE' };
+  }
+  const ix = readIndex();
+  ix.outDir = dir;
+  writeIndex(ix);
+  log.info('output folder changed to', dir);
+  return { ok: true, dir };
+});
+
+ipcMain.handle('out:reset', () => {
+  if (out) return { ok: false, error: 'RECORDING' };
+  const ix = readIndex();
+  delete ix.outDir;
+  writeIndex(ix);
+  log.info('output folder reset to the default');
+  return { ok: true, dir: outDir() };
+});
+
+// Keep the system window buttons in step with the interface theme.
+ipcMain.handle('ui:theme', (e, theme) => {
+  if (win && !win.isDestroyed() && process.platform !== 'darwin') {
+    try {
+      win.setTitleBarOverlay(Object.assign({ height: 36 }, TITLE_BAR[theme === 'dark' ? 'dark' : 'light']));
+    } catch (err) {
+      log.warn('could not recolour the title bar:', err.message);
+    }
+  }
+  return true;
+});
+
 ipcMain.handle('open:dir', () => {
   fs.mkdirSync(outDir(), { recursive: true });
   return shell.openPath(outDir());
@@ -418,10 +508,10 @@ function createWindow() {
     height: 900,
     minWidth: 960,
     minHeight: 640,
-    backgroundColor: '#09090A',
+    backgroundColor: '#F3F3F3',
     // The page draws its own title bar; the system window buttons sit on top of it.
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
-    titleBarOverlay: process.platform === 'darwin' ? false : { color: '#111112', symbolColor: '#A1A1AA', height: 36 },
+    titleBarOverlay: process.platform === 'darwin' ? false : Object.assign({ height: 36 }, TITLE_BAR.light),
     title: 'HUD Recorder',
     icon: path.join(__dirname, '..', '..', 'build', 'icon.png'),
     webPreferences: {

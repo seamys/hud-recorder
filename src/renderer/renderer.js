@@ -98,6 +98,14 @@
     SHADOW = !!cfg.get('look.shadow');
   }
 
+  // Interface theme: sets the page palette and asks the main process to recolour the system
+  // window buttons to match.
+  function applyTheme() {
+    const theme = cfg.get('general.theme') === 'dark' ? 'dark' : 'light';
+    document.body.dataset.theme = theme;
+    try { window.api.setTheme(theme); } catch (e) { /* cosmetic only */ }
+  }
+
   function applyResolution() {
     const r = RESOLUTIONS[cfg.get('video.resolution')] || RESOLUTIONS['1080p'];
     W = r[0]; H = r[1]; S = W / 1280;
@@ -592,15 +600,16 @@
     }
 
     // Top centre: rotating news headline
-    if (show('news') && env.news && env.news.length) {
+    const news = (env.news || []).slice(0, Math.max(1, Number(cfg.get('info.newsMax')) || 12));
+    if (show('news') && news.length) {
       const slot = Math.max(4, Number(cfg.get('info.newsSeconds')) || 8) * 1000;
-      const idx = Math.floor(now / slot) % env.news.length;
+      const idx = Math.floor(now / slot) % news.length;
       const ph = (now % slot) / slot;
       alpha(Math.max(0, Math.min(1, ph / 0.06, (1 - ph) / 0.06)));
-      text(t('hud.news', { i: idx + 1, n: env.news.length }), 640, 52, 11, AC, { ls: 3, align: 'center' });
+      text(t('hud.news', { i: idx + 1, n: news.length }), 640, 52, 11, AC, { ls: 3, align: 'center' });
       ctx.font = '400 15px ' + FONT;
       try { ctx.letterSpacing = '0px'; } catch (e) { /* older Chromium */ }
-      text(fitText(env.news[idx], 560), 640, 72, 15, FG, { align: 'center' });
+      text(fitText(news[idx], 560), 640, 72, 15, FG, { align: 'center' });
       alpha(1);
     }
 
@@ -661,13 +670,17 @@
       const imperial = cfg.get('info.units') === 'imperial';
       const temp = imperial ? Math.round(w.temp * 9 / 5 + 32) + '°F' : Math.round(w.temp) + '°C';
       const wind = imperial ? Math.round(w.wind * 0.621) + ' mph' : Math.round(w.wind) + ' km/h';
-      section(1216, y, t('hud.env'), 'right');
-      y += 36;
-      row(1216, y, t('hud.location'), env.city || '—', 'right'); y += 46;
-      row(1216, y, t('hud.weather'), temp + ' · ' + weatherText(w.code), 'right'); y += 46;
-      row(1216, y, t('hud.humidityWind'), Math.round(w.humidity) + '% · ' + wind, 'right'); y += 46;
-      if (w.aqi != null) { row(1216, y, t('hud.air'), 'AQI ' + Math.round(w.aqi), 'right'); y += 46; }
-      if (w.sunrise && w.sunset) row(1216, y, t('hud.sun'), w.sunrise + ' / ' + w.sunset, 'right');
+      const rows = [];
+      if (show('envLocation')) rows.push([t('hud.location'), String(cfg.get('info.label') || '').trim() || env.city || '—']);
+      if (show('envWeather')) rows.push([t('hud.weather'), temp + ' · ' + weatherText(w.code)]);
+      if (show('envWind')) rows.push([t('hud.humidityWind'), Math.round(w.humidity) + '% · ' + wind]);
+      if (show('envAir') && w.aqi != null) rows.push([t('hud.air'), 'AQI ' + Math.round(w.aqi)]);
+      if (show('envSun') && w.sunrise && w.sunset) rows.push([t('hud.sun'), w.sunrise + ' / ' + w.sunset]);
+      if (rows.length) {
+        section(1216, y, t('hud.env'), 'right');
+        y += 36;
+        rows.forEach((r) => { row(1216, y, r[0], r[1], 'right'); y += 46; });
+      }
     }
 
     // Bottom left: name plate
@@ -810,6 +823,7 @@
     micSel = $('mic');
     const langSel = $('lang');
     window.i18n.apply();
+    applyTheme();
     readLook();
     applyResolution();
     readKeywords();
@@ -818,8 +832,10 @@
     info = Object.assign(info, await window.api.logInfo());
     nameIn.value = info.name;
     topicIn.value = info.topic;
+    $('outDir').textContent = info.dir;
     cfg.sync('info.city', info.city || '');
     cfg.sync('info.feed', info.rss || '');
+    cfg.sync('info.preset', (function (v) { const hit = cfg.NEWS_PRESETS.find((p) => p.url === v); return !v ? 'off' : hit ? hit.id : 'custom'; })(String(info.rss || '').trim()));
 
     capLanguage = cfg.get('speech.capLang') || (window.i18n.lang === 'zh-CN' ? 'chinese' : 'english');
     cfg.sync('speech.capLang', capLanguage);
@@ -868,8 +884,16 @@
       if (res.ok) setStatus(city.trim() ? 'status.envUpdated' : 'status.envOff');
       else setStatus('status.envFail', { error: errorText(res.error) });
     };
+    // Keep the source menu in step with whatever is in the feed box.
+    const presetFor = (value) => {
+      const v = String(value || '').trim();
+      if (!v) return 'off';
+      const hit = cfg.NEWS_PRESETS.find((p) => p.url === v);
+      return hit ? hit.id : 'custom';
+    };
     const applyFeed = async () => {
       const url = String(cfg.get('info.feed') || '');
+      cfg.sync('info.preset', presetFor(url));
       setStatus('status.feedLoading');
       const res = await window.api.setFeed(url);
       await pollEnv();
@@ -885,10 +909,15 @@
     window.api.onAsr(onAsr);
     cfg.onChange((key, value) => {
       if (key.indexOf('look.') === 0) readLook();
+      else if (key === 'general.theme') applyTheme();
       else if (key === 'video.resolution') { applyResolution(); startVideo(); }
       else if (key === 'video.fps') startVideo();
       else if (key === 'info.city') applyCity();
       else if (key === 'info.feed') applyFeed();
+      else if (key === 'info.preset') {
+        const preset = cfg.NEWS_PRESETS.find((p) => p.id === value);
+        if (preset && preset.url !== undefined) { cfg.sync('info.feed', preset.url); applyFeed(); }
+      }
       else if (key === 'speech.face') setFace(!!value);
       else if (key === 'speech.hands') setHands(!!value);
       else if (key === 'speech.captions') setCaptions(!!value);
@@ -899,6 +928,17 @@
     cfg.onAction((action) => {
       if (action === 'openDir') window.api.openDir();
       else if (action === 'openLogs') window.api.openLogs();
+      else if (action === 'chooseDir' || action === 'resetDir') {
+        (action === 'chooseDir' ? window.api.chooseOutDir() : window.api.resetOutDir()).then((res) => {
+          if (res.ok) {
+            info.dir = res.dir;
+            $('outDir').textContent = res.dir;
+            setStatus('status.dirChanged', { dir: res.dir });
+          } else if (!res.canceled) {
+            setStatus('status.dirFail', { error: errorText(res.error) });
+          }
+        });
+      }
       else if (action === 'reset' && !recording) { cfg.reset(); location.reload(); }
     });
     if (cfg.get('speech.face')) setFace(true);
