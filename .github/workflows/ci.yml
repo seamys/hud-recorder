@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
+        os: [windows-latest, macos-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -20,7 +20,7 @@ jobs:
       - name: Check syntax
         shell: bash
         run: |
-          for f in src/main/main.js src/main/lib/*.js src/preload/preload.js src/renderer/*.js; do
+          for f in src/main/*.js src/main/lib/*.js src/preload/preload.js src/renderer/*.js; do
             node --check "$f"
           done
       - name: Run unit tests

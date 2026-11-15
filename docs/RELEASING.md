@@ -7,12 +7,14 @@ Releases are built by GitHub Actions. Nothing needs to be built on your own mach
 3. Tag the commit and push the tag:
 
    ```bash
-   git tag v0.3.0
-   git push origin v0.3.0
+   git tag v0.4.0
+   git push origin v0.4.0
    ```
 
-4. The **Release** workflow builds a Windows installer (`.exe`) and a macOS disk image (`.dmg`,
-   Apple silicon) and attaches them to a **draft** release.
+4. The **Release** workflow builds four installers in parallel, each on its own runner:
+   Windows x64 (`.exe`), macOS Apple silicon (`.dmg`), macOS Intel (`.dmg`) and Linux x64
+   (`.AppImage`). A final job gathers them into one **draft** release. If one platform fails,
+   the others are still attached.
 5. Open the draft on the repository's Releases page, check the files, write the notes, and
    publish it.
 

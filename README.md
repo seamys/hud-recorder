@@ -8,12 +8,12 @@
   <a href="https://github.com/seamys/hud-recorder/actions/workflows/ci.yml"><img src="https://github.com/seamys/hud-recorder/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/seamys/hud-recorder/releases"><img src="https://img.shields.io/github/v/release/seamys/hud-recorder?include_prereleases&label=release" alt="Latest release"></a>
   <a href="https://github.com/seamys/hud-recorder/releases"><img src="https://img.shields.io/github/downloads/seamys/hud-recorder/total" alt="Downloads"></a>
-  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS-6FE3E1" alt="Platform: Windows and macOS">
+  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-6FE3E1" alt="Platform: Windows, macOS and Linux">
   <a href="LICENSE"><img src="https://img.shields.io/github/license/seamys/hud-recorder" alt="License"></a>
   <a href="https://seamys.github.io/hud-recorder/"><img src="https://img.shields.io/badge/website-online-FF8A4C" alt="Website"></a>
 </p>
 
-A video log recorder for Windows and macOS that burns a sci-fi style heads-up display into the recording.
+A video log recorder for Windows, macOS and Linux that burns a sci-fi style heads-up display into the recording.
 Think of the telemetry overlay on a rocket launch stream, or a mission log in a science fiction
 film, driven by real data from your own machine.
 
@@ -53,7 +53,7 @@ recorded, so the preview is exactly what ends up in the file.
 
 ## Download
 
-Installers for Windows and macOS are on the
+Installers for Windows, macOS and Linux are on the
 [Releases page](https://github.com/seamys/hud-recorder/releases). The project website is at
 <https://seamys.github.io/hud-recorder/>.
 
@@ -68,8 +68,8 @@ The builds are not code signed yet:
 | Platform | Status |
 | --- | --- |
 | Windows 10 and 11 | Developed and tested here |
-| macOS (Apple silicon) | Supported in code and built by CI, but not yet tested on real hardware. Reports welcome |
-| Linux | Not supported yet |
+| macOS (Apple silicon and Intel) | Supported in code and built by CI, but not yet tested on real hardware. Reports welcome |
+| Linux x64 (AppImage) | Built by CI, not yet tested. Reports welcome |
 
 GPU readouts need an NVIDIA GPU with `nvidia-smi` available, so they are hidden on Macs.
 
@@ -185,7 +185,7 @@ scaled to 1080p. Strings live in `src/renderer/i18n.js`.
 
 ## Known limitations
 
-- macOS support has not been tested on real hardware yet. Linux is not supported.
+- macOS and Linux builds have not been tested on real hardware yet.
 - The recorder relies on Chromium's built-in encoder. Whether it uses hardware encoding depends
   on your GPU and drivers.
 - Installers are not code signed, so Windows and macOS show a warning on first launch.

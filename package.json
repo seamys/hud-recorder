@@ -1,7 +1,7 @@
 {
   "name": "hud-recorder",
-  "version": "0.3.0",
-  "description": "Video log recorder for Windows and macOS that burns a sci-fi style HUD overlay into the recording.",
+  "version": "0.4.0",
+  "description": "Video log recorder for Windows, macOS and Linux that burns a sci-fi style HUD overlay into the recording.",
   "main": "src/main/main.js",
   "author": "seamys",
   "license": "MIT",
@@ -69,14 +69,12 @@
         "NSMicrophoneUsageDescription": "HUD Recorder records audio from your microphone."
       }
     },
-    "publish": [
-      {
-        "provider": "github",
-        "owner": "seamys",
-        "repo": "hud-recorder",
-        "releaseType": "draft"
-      }
-    ],
-    "npmRebuild": false
+    "npmRebuild": false,
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "AudioVideo"
+    }
   }
 }

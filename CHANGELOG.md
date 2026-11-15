@@ -4,12 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.4.0] - 2026-11-15
 
 ### Added
 
 - Optional hand tracking: a live skeleton for both hands, left and right labels, a rule-based
   gesture name and a position readout. Off by default.
+- Release builds for four targets from one tag: Windows x64, macOS Apple silicon, macOS Intel
+  and Linux x64 (AppImage), gathered into a single draft release.
 - Eye analysis in speaker analysis: gaze direction and blink rate, with optional iris markers.
 
 ### Changed

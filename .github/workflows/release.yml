@@ -1,22 +1,30 @@
 name: Release
 
-# Builds installers for Windows and macOS and attaches them to a draft GitHub release.
-# Triggered by pushing a version tag (for example v0.2.0) or by running it manually.
+# Builds installers for every supported platform in parallel, then gathers them into one draft
+# GitHub release. Triggered by pushing a version tag (for example v0.4.0) or run manually.
+#
+# Each platform is built on its own runner so that native dependencies match the target.
 
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   build:
+    name: Build (${{ matrix.name }})
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
+        include:
+          - name: Windows x64
+            os: windows-latest
+          - name: macOS Apple silicon
+            os: macos-latest
+          - name: macOS Intel
+            os: macos-15-intel
+          - name: Linux x64
+            os: ubuntu-latest
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -26,7 +34,45 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
-      - name: Build and upload to a draft release
-        run: npx electron-builder --publish always
+      - name: Build the installer
+        run: npx electron-builder --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-${{ matrix.os }}
+          if-no-files-found: error
+          path: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.AppImage
+
+  release:
+    name: Draft release
+    needs: build
+    # Publish whatever built, even if one platform failed.
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: installers
+          pattern: installer-*
+          merge-multiple: true
+      - name: Create or update the draft release
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="v$(node -p "require('./package.json').version")"
+          fi
+          ls -la installers
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" installers/* --clobber
+          else
+            gh release create "$TAG" installers/* --draft --title "HUD Recorder ${TAG#v}" --generate-notes
+          fi
