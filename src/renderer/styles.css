@@ -1,0 +1,154 @@
+:root {
+  --bg: #070A0C;
+  --bar: #0B1013;
+  --panel: #10161A;
+  --line: #1C262C;
+  --line2: #2A363D;
+  --fg: #E8F1F2;
+  --dim: #9FB0B5;
+  --ac: #6FE3E1;
+  --rec: #FF8A4C;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  font-size: 13px;
+}
+
+body { display: flex; flex-direction: column; }
+
+#viewwrap { flex: 1; min-height: 0; padding: 12px 12px 0; }
+canvas { display: block; width: 100%; height: 100%; object-fit: contain; }
+
+/* ---------- control bar ---------- */
+
+#bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  height: 68px;
+  margin-top: 12px;
+  padding: 0 20px;
+  background: var(--bar);
+  border-top: 1px solid var(--line);
+}
+
+#rec {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--rec);
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background .15s;
+}
+#rec i {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--rec);
+  transition: border-radius .15s, width .15s, height .15s;
+}
+#rec:hover { background: rgba(255, 138, 76, .12); }
+#rec.on { background: rgba(255, 138, 76, .16); }
+#rec.on i { width: 14px; height: 14px; border-radius: 3px; }
+#rec:disabled { opacity: .5; cursor: default; }
+
+#info { flex: none; width: 300px; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+#state { font-size: 15px; font-weight: 600; letter-spacing: .5px; font-variant-numeric: tabular-nums; }
+#state.on { color: var(--rec); }
+#status { font-size: 12px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+#who {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 20px;
+  border-left: 1px solid var(--line);
+}
+#who input {
+  height: 36px;
+  padding: 0 10px;
+  background: transparent;
+  color: var(--fg);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font: inherit;
+  min-width: 0;
+}
+#who input:hover { border-color: var(--line2); }
+#who input:focus { border-color: var(--ac); background: var(--panel); outline: none; }
+#who input::placeholder { color: #7F9096; font-weight: 400; }
+#name { flex: 0 1 180px; font-size: 14px; font-weight: 600; }
+#topic { flex: 1 1 200px; color: var(--dim); }
+.sep { flex: none; color: #4A5960; }
+
+.icon {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.icon:hover, .icon[aria-expanded="true"] { color: var(--fg); background: var(--panel); border-color: var(--line2); }
+.icon svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---------- settings panel ---------- */
+
+#panel {
+  position: absolute;
+  right: 20px;
+  bottom: 78px;
+  width: 340px;
+  padding: 18px;
+  display: none;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--panel);
+  border: 1px solid var(--line2);
+  border-radius: 10px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, .5);
+}
+#panel.open { display: flex; }
+#panel h2 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; color: var(--ac); }
+
+.f { display: flex; flex-direction: column; gap: 6px; }
+.f label { font-size: 12px; color: var(--dim); }
+.f input, .f select {
+  height: 36px;
+  width: 100%;
+  padding: 0 10px;
+  background: var(--bar);
+  color: var(--fg);
+  border: 1px solid var(--line2);
+  border-radius: 6px;
+  font: inherit;
+}
+.f input:focus, .f select:focus { border-color: var(--ac); outline: none; }
+.f select:disabled { opacity: .5; }
+.hint { font-size: 11px; color: #8A9BA1; line-height: 1.5; }
+hr { width: 100%; border: 0; border-top: 1px solid var(--line); margin: 2px 0; }
+
+:focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; }

@@ -1,0 +1,26 @@
+{
+  "name": "hud-recorder",
+  "version": "0.1.0",
+  "description": "Video log recorder for Windows that burns a sci-fi style HUD overlay into the recording.",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test \"test/*.test.js\""
+  },
+  "keywords": [
+    "electron",
+    "screen-recorder",
+    "video-log",
+    "vlog",
+    "hud",
+    "overlay",
+    "telemetry"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "electron": "^45.0.0"
+  }
+}
