@@ -57,6 +57,15 @@ is hidden.
 | Headlines | The configured RSS or Atom feed | 10 min |
 | Audio level and spectrum | Web Audio `AnalyserNode` | Every frame |
 
+## Settings
+
+`src/renderer/settings.js` holds one flat key/value store with defaults, persisted to local
+storage, and a declarative description of the settings panel. The panel is generated from that
+description. The draw loop reads visual options every frame, so most changes need no extra code;
+options with side effects (resolution, captions, city) are handled in one `onChange` listener
+in `renderer.js`. The city and feed URL are the exception: they live in `index.json` because
+the main process needs them.
+
 ## Logging
 
 `src/main/lib/logger.js` appends timestamped lines to `main.log` in Electron's log folder and

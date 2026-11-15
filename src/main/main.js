@@ -2,7 +2,7 @@
 
 // Main process: window, file output, log numbering, system stats, weather and news.
 
-const { app, BrowserWindow, ipcMain, session, shell, systemPreferences } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, session, shell, systemPreferences, utilityProcess } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { execFile } = require('child_process');
@@ -10,14 +10,19 @@ const { localDate, dayNumber, logFileName } = require('./lib/dates');
 const { parseFeedTitles } = require('./lib/feed');
 const { NVIDIA_SMI_ARGS, parseNvidiaSmi } = require('./lib/gpu');
 const { createLogger } = require('./lib/logger');
+const { formatChapters, formatSrt } = require('./lib/sidecar');
 
 const REFRESH_MS = 10 * 60 * 1000;
-const FETCH_TIMEOUT_MS = 8000;
+const FETCH_TIMEOUT_MS = 15000;
+const ASR_MODELS = { fast: 'Xenova/whisper-base', accurate: 'Xenova/whisper-small' };
+const FACE_MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
 
 let win = null;
 let out = null;       // write stream of the recording in progress
 let outFile = null;
 let gpu = null;       // latest nvidia-smi reading, or null
+let asr = null;       // speech recognition utility process, or null
+let asrFinals = 0;
 let gpuSeen = null;   // last logged availability, so the log records changes only
 
 // Replaced with the file logger once the app is ready and the log folder is known.
@@ -81,6 +86,7 @@ function pollGpu() {
 
 // ---------- environment and news ----------
 
+let weatherRetry = null;
 const env = { city: '', weather: null, weatherError: null, news: [], newsError: null };
 
 async function getJson(url) {
@@ -122,7 +128,14 @@ async function refreshWeather() {
   } catch (e) {
     env.weatherError = e.message;
     log.warn('weather refresh failed:', e.message);
+    if (!weatherRetry) {
+      // One quick retry: the first request after launch sometimes times out.
+      weatherRetry = setTimeout(() => { weatherRetry = null; refreshWeather(); }, 5000);
+      return;
+    }
   }
+  clearTimeout(weatherRetry);
+  weatherRetry = null;
 }
 
 async function refreshNews() {
@@ -172,8 +185,10 @@ ipcMain.handle('rec:chunk', (e, ab) => new Promise((resolve, reject) => {
   out.write(Buffer.from(ab), (err) => (err ? reject(err) : resolve(true)));
 }));
 
-ipcMain.handle('rec:stop', () => new Promise((resolve) => {
-  if (!out) return resolve({ file: null });
+// Close the output file and record the log in the index. Used by a normal stop and when the
+// window is closed mid-recording, so an interrupted log still gets its number.
+function finishRecording(extras, done) {
+  if (!out) return done({ file: null });
   const file = outFile;
   out.end(() => {
     out = null;
@@ -186,15 +201,38 @@ ipcMain.handle('rec:stop', () => new Promise((resolve) => {
       number: ix.count,
       file: path.basename(file),
       date: new Date().toISOString(),
-      topic: ix.topic || ''
+      topic: ix.topic || '',
+      chapters: writeSidecars(file, extras)
     });
     writeIndex(ix);
     let bytes = 0;
     try { bytes = fs.statSync(file).size; } catch (e) { /* size is informational */ }
     log.info('recording saved:', file, '(' + bytes + ' bytes)');
-    resolve({ file });
+    done({ file });
   });
-}));
+}
+
+ipcMain.handle('rec:stop', (e, extras) => new Promise((resolve) => finishRecording(extras, resolve)));
+
+// Chapter list and subtitles are saved next to the video as plain text files.
+function writeSidecars(file, extras) {
+  const base = file.replace(/\.[^.\\/]+$/, '');
+  const marks = extras && Array.isArray(extras.marks)
+    ? extras.marks.filter((t) => typeof t === 'number' && isFinite(t) && t > 0).slice(0, 200) : [];
+  const cues = extras && Array.isArray(extras.cues)
+    ? extras.cues.filter((c) => c && typeof c.start === 'number' && typeof c.end === 'number').slice(0, 5000) : [];
+  try {
+    if (marks.length) {
+      const label = String((extras && extras.chapterLabel) || 'Chapter').slice(0, 40);
+      fs.writeFileSync(base + '.chapters.txt', formatChapters(marks, label));
+    }
+    if (cues.length) fs.writeFileSync(base + '.srt', formatSrt(cues));
+    if (marks.length || cues.length) log.info('sidecars written:', marks.length + ' chapter marks,', cues.length + ' subtitle cues');
+  } catch (err) {
+    log.error('could not write sidecar files', err);
+  }
+  return marks;
+}
 
 // Discard a recording that failed to start; the log counter is not advanced.
 ipcMain.handle('rec:abort', () => new Promise((resolve) => {
@@ -275,6 +313,92 @@ ipcMain.handle('log:write', (e, level, message) => {
   return true;
 });
 
+// ---------- live captions ----------
+
+function stopAsr() {
+  if (asr) {
+    try { asr.kill(); } catch (e) { /* already gone */ }
+  }
+  asr = null;
+}
+
+ipcMain.handle('asr:start', (e, opts) => new Promise((resolve, reject) => {
+  stopAsr();
+  const model = ASR_MODELS[opts && opts.model] || ASR_MODELS.fast;
+  const child = utilityProcess.fork(path.join(__dirname, 'asr-worker.js'), [], { serviceName: 'HUD Recorder captions' });
+  asr = child;
+  asrFinals = 0;
+  let settled = false;
+  const forward = (m) => { if (win && !win.isDestroyed()) win.webContents.send('asr:event', m); };
+  log.info('captions: starting with', model);
+
+  child.on('message', (m) => {
+    if (!m) return;
+    if (m.type === 'ready') {
+      log.info('captions: model ready');
+      if (!settled) { settled = true; resolve(true); }
+    } else if (m.type === 'fatal') {
+      log.error('captions: could not load the model:', m.message);
+      if (!settled) { settled = true; reject(new Error(m.message)); }
+      if (asr === child) stopAsr();
+    } else if (m.type === 'progress') {
+      forward(m);
+    } else if (m.type === 'text') {
+      // Timing only: what was said is never written to the log.
+      if (m.final && (++asrFinals <= 3 || asrFinals % 25 === 0)) {
+        log.info('captions: utterance ' + asrFinals + ', ' + m.dur.toFixed(1) + ' s of audio transcribed in ' + m.ms + ' ms');
+      }
+      forward(m);
+    } else if (m.type === 'error') {
+      log.warn('captions: transcription failed:', m.message);
+      forward(m);
+    }
+  });
+  child.on('exit', (code) => {
+    if (asr === child) asr = null;
+    if (!settled) { settled = true; reject(new Error('the captions process exited with code ' + code)); }
+    else if (code) log.warn('captions: process exited with code ' + code);
+  });
+  child.postMessage({
+    type: 'init',
+    model,
+    language: opts && opts.language === 'english' ? 'english' : 'chinese',
+    cacheDir: path.join(app.getPath('userData'), 'models', 'transformers')
+  });
+}));
+
+ipcMain.on('asr:audio', (e, samples) => {
+  if (asr) asr.postMessage({ type: 'audio', samples });
+});
+
+ipcMain.handle('asr:language', (e, language) => {
+  if (asr) asr.postMessage({ type: 'language', language: language === 'english' ? 'english' : 'chinese' });
+  return true;
+});
+
+ipcMain.handle('asr:stop', () => { stopAsr(); return true; });
+
+// Speaker analysis model: downloaded once into the app's data folder, then served from disk.
+ipcMain.handle('face:model', async () => {
+  const dir = path.join(app.getPath('userData'), 'models');
+  const file = path.join(dir, 'face_landmarker.task');
+  try {
+    return fs.readFileSync(file);
+  } catch (e) {
+    log.info('downloading the face model from', FACE_MODEL_URL);
+  }
+  const r = await fetch(FACE_MODEL_URL, { signal: AbortSignal.timeout(60000) });
+  if (!r.ok) {
+    log.error('face model download failed: HTTP ' + r.status);
+    throw new Error('HTTP ' + r.status);
+  }
+  const buf = Buffer.from(await r.arrayBuffer());
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(file, buf);
+  log.info('face model saved (' + buf.length + ' bytes)');
+  return buf;
+});
+
 ipcMain.handle('open:logs', () => shell.openPath(log.dir));
 
 ipcMain.handle('open:dir', () => {
@@ -286,12 +410,14 @@ ipcMain.handle('open:dir', () => {
 
 function createWindow() {
   win = new BrowserWindow({
-    width: 1280,
-    height: 860,
-    minWidth: 900,
-    minHeight: 620,
-    backgroundColor: '#070A0C',
-    autoHideMenuBar: true,
+    width: 1360,
+    height: 900,
+    minWidth: 960,
+    minHeight: 640,
+    backgroundColor: '#09090A',
+    // The page draws its own title bar; the system window buttons sit on top of it.
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
+    titleBarOverlay: process.platform === 'darwin' ? false : { color: '#111112', symbolColor: '#A1A1AA', height: 36 },
     title: 'HUD Recorder',
     icon: path.join(__dirname, '..', '..', 'build', 'icon.png'),
     webPreferences: {
@@ -322,6 +448,7 @@ async function requestMediaAccess() {
 
 app.whenReady().then(async () => {
   log = createLogger(app.getPath('logs'));
+  if (process.platform !== 'darwin') Menu.setApplicationMenu(null);
   log.info('HUD Recorder ' + app.getVersion() + ' starting on ' + process.platform + ' ' + process.arch +
     ', Electron ' + process.versions.electron + ', locale ' + app.getLocale());
 
@@ -345,8 +472,11 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
+  stopAsr();
   if (out) {
-    try { out.end(); } catch (e) { /* already closed */ }
+    log.warn('window closed while recording; saving what was captured');
+    finishRecording(null, () => app.quit());
+    return;
   }
   log.info('window closed, quitting');
   app.quit();

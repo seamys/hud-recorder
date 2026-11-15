@@ -2,49 +2,63 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; media-src 'self' blob: mediastream:">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; media-src 'self' blob: mediastream:">
 <title>HUD Recorder</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div id="viewwrap"><canvas id="view" width="1920" height="1080"></canvas></div>
+
+<div id="titlebar">
+  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5"></path><circle cx="12" cy="12" r="2.6"></circle></svg>
+  <span>HUD Recorder</span>
+</div>
+
+<div id="stagewrap">
+  <div id="viewbox"><canvas id="view" width="1920" height="1080"></canvas></div>
+
+  <aside id="drawer" aria-hidden="true">
+    <div class="drawer-head">
+      <h1 data-i18n="ui.settings"></h1>
+      <button id="closeDrawer" class="icon" type="button" data-i18n-label="ui.close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+      </button>
+    </div>
+    <div id="tabs" role="tablist"></div>
+    <div id="sections"></div>
+  </aside>
+</div>
 
 <div id="bar">
-  <button id="rec" type="button"><i></i></button>
-  <div id="info">
-    <div id="state"></div>
-    <div id="status" role="status"></div>
-  </div>
-  <div id="who">
+  <div class="left">
     <input id="name" data-i18n-ph="ui.namePh" data-i18n-label="ui.nameLabel">
     <span class="sep" aria-hidden="true">/</span>
     <input id="topic" data-i18n-ph="ui.topicPh" data-i18n-label="ui.topicLabel">
   </div>
-  <button id="open" class="icon" type="button" data-i18n-label="ui.openFolder">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7.5a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
-  </button>
-  <button id="gear" class="icon" type="button" data-i18n-label="ui.settings" aria-expanded="false" aria-controls="panel">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"></path><circle cx="15" cy="7" r="2"></circle><circle cx="9" cy="17" r="2"></circle></svg>
-  </button>
 
-  <div id="panel">
-    <h2 data-i18n="ui.devices"></h2>
-    <div class="f"><label for="cam" data-i18n="ui.camera"></label><select id="cam"></select></div>
-    <div class="f"><label for="mic" data-i18n="ui.microphone"></label><select id="mic"></select></div>
-    <hr>
-    <h2 data-i18n="ui.overlay"></h2>
-    <div class="f"><label for="city" data-i18n="ui.city"></label><input id="city" data-i18n-ph="ui.cityPh"></div>
-    <div class="f"><label for="rss" data-i18n="ui.rss"></label><input id="rss" data-i18n-ph="ui.rssPh"></div>
-    <div class="hint" data-i18n="ui.hint"></div>
-    <hr>
-    <div class="f"><label for="lang" data-i18n="ui.language"></label>
-      <select id="lang"><option value="en">English</option><option value="zh-CN">简体中文</option></select>
+  <div class="center">
+    <div class="side side-l">
+      <button id="mark" class="icon" type="button" data-i18n-label="ui.mark" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4M6 4h11l-2.5 4L17 12H6"></path></svg>
+      </button>
     </div>
-    <hr>
-    <button id="logs" class="link" type="button" data-i18n="ui.openLogs"></button>
+    <button id="rec" type="button"><i></i></button>
+    <div class="side side-r"><div id="state"></div></div>
+  </div>
+
+  <div class="right">
+    <div id="status" role="status"></div>
+    <button id="open" class="icon" type="button" data-i18n-label="ui.openFolder">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7.5a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+    </button>
+    <button id="gear" class="icon" type="button" data-i18n-label="ui.settings" aria-expanded="false" aria-controls="drawer">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"></path><circle cx="15" cy="7" r="2"></circle><circle cx="9" cy="17" r="2"></circle></svg>
+    </button>
   </div>
 </div>
+
 <script src="i18n.js"></script>
+<script src="settings.js"></script>
+<script src="face.js"></script>
 <script src="renderer.js"></script>
 </body>
 </html>

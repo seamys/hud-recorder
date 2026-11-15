@@ -105,7 +105,7 @@ footer{padding:40px 0 64px;border-top:1px solid var(--line);color:var(--dim);fon
   <p class="lead">HUD Recorder burns a live heads-up display into your recordings: timecode, device telemetry, weather and headlines, driven by real data from your own machine.</p>
   <div class="cta">
     <a class="btn primary" href="https://github.com/seamys/hud-recorder/releases/latest">Download for Windows</a>
-    <a class="btn primary" href="https://github.com/seamys/hud-recorder/releases/latest">Download for macOS</a>
+    <a class="btn primary" href="https://github.com/seamys/hud-recorder/releases/latest">Download for macOS (Apple silicon)</a>
     <a class="btn" href="https://github.com/seamys/hud-recorder">View source on GitHub</a>
   </div>
   <p class="note">Free and MIT licensed. Installers are not code signed yet, so your system will ask for confirmation on first launch.</p>
@@ -183,7 +183,7 @@ footer{padding:40px 0 64px;border-top:1px solid var(--line);color:var(--dim);fon
     </div>
   </div>
 </div>
-<p class="note" style="margin:14px 0 72px">Concept demo with simulated values. The device, audio, weather and news panels ship today; speaker analysis and live captions are on the roadmap. In the app, every value on screen is real.</p>
+<p class="note" style="margin:14px 0 72px">Concept demo with simulated values. The device, audio, weather and news panels are stable; speaker analysis and live captions are new and still being tested. In the app, every value on screen is real.</p>
 
 <section id="features">
   <div class="head">
@@ -198,6 +198,9 @@ footer{padding:40px 0 64px;border-top:1px solid var(--line);color:var(--dim);fon
     <div class="cell"><div class="mono">04</div><h3>Environment panel</h3><p>Weather, humidity, wind, air quality, sunrise and sunset for a city you choose. Leave it empty to stay offline.</p></div>
     <div class="cell"><div class="mono">05</div><h3>News ticker</h3><p>Headlines from any RSS or Atom feed rotate at the top of the frame and date your log like a newspaper in a photo.</p></div>
     <div class="cell"><div class="mono">06</div><h3>Automatic log keeping</h3><p>Files are numbered and dated, saved as MP4, and listed in a plain JSON index. English and Simplified Chinese built in.</p></div>
+    <div class="cell"><div class="mono">07</div><h3>Captions and chapters</h3><p>Optional on-device speech recognition puts live captions in the frame and saves them as subtitles. Mark chapters with one key while you record.</p></div>
+    <div class="cell"><div class="mono">08</div><h3>Every element is yours to set</h3><p>Resolution up to 4K, frame rate and bitrate, a switch for each HUD element, colours, opacity and typeface, all with a live preview.</p></div>
+    <div class="cell"><div class="mono">09</div><h3>Speaker analysis</h3><p>Optional face tracking frame, head pose, eye contact and talk ratio, computed on your own machine.</p></div>
   </div>
 </section>
 
@@ -214,6 +217,7 @@ footer{padding:40px 0 64px;border-top:1px solid var(--line);color:var(--dim);fon
       <p>Recordings stay in your own video folder. The app only goes online for the two things you switch on.</p>
     </div>
     <ul class="list">
+      <li><span class="tag">Models</span><span>Switching on captions or speaker analysis downloads a model once from <strong>Hugging Face</strong> or <strong>Google</strong>. Audio and video never leave your machine.</span></li>
       <li><span class="tag">Weather</span><span><strong>Open-Meteo</strong> receives the city you typed and its coordinates, every ten minutes while a city is set.</span></li>
       <li><span class="tag">News</span><span><strong>Your feed URL</strong> is fetched with a plain request, every ten minutes while a feed is set.</span></li>
       <li><span class="tag">Offline</span><span>Clear both fields and the app makes <strong>no network requests</strong> at all.</span></li>
@@ -232,8 +236,8 @@ footer{padding:40px 0 64px;border-top:1px solid var(--line);color:var(--dim);fon
     </div>
     <ul class="list">
       <li><span class="tag done">Shipped</span><span><strong>Stage 1.</strong> Camera capture, HUD compositing, MP4 recording, log numbering, environment panel, news ticker.</span></li>
-      <li><span class="tag">Next</span><span><strong>Stage 2.</strong> Speaker analysis: face tracking frame, head pose, eye contact, speaking rate.</span></li>
-      <li><span class="tag">Planned</span><span><strong>Stage 3.</strong> Live captions, keyword callouts, chapter markers.</span></li>
+      <li><span class="tag done">In testing</span><span><strong>Stage 2.</strong> Speaker analysis: face tracking frame, head pose, eye contact, talk ratio.</span></li>
+      <li><span class="tag done">In testing</span><span><strong>Stage 3.</strong> Live captions saved as subtitles, keyword callouts, chapter markers, speaking rate.</span></li>
       <li><span class="tag">Planned</span><span><strong>Stage 4.</strong> Screen recording mode with a camera inset.</span></li>
       <li><span class="tag">Planned</span><span><strong>Stage 5.</strong> NVENC encoding option, HUD themes, signed installers.</span></li>
     </ul>

@@ -9,7 +9,7 @@ contextBridge.exposeInMainWorld('api', {
   saveProfile: (name, topic) => ipcRenderer.invoke('log:saveProfile', name, topic),
   recStart: (ext) => ipcRenderer.invoke('rec:start', ext),
   recChunk: (ab) => ipcRenderer.invoke('rec:chunk', ab),
-  recStop: () => ipcRenderer.invoke('rec:stop'),
+  recStop: (extras) => ipcRenderer.invoke('rec:stop', extras),
   recAbort: () => ipcRenderer.invoke('rec:abort'),
   sysStats: () => ipcRenderer.invoke('sys:stats'),
   envGet: () => ipcRenderer.invoke('env:get'),
@@ -17,5 +17,11 @@ contextBridge.exposeInMainWorld('api', {
   setFeed: (url) => ipcRenderer.invoke('env:setFeed', url),
   openDir: () => ipcRenderer.invoke('open:dir'),
   openLogs: () => ipcRenderer.invoke('open:logs'),
+  faceModel: () => ipcRenderer.invoke('face:model'),
+  asrStart: (opts) => ipcRenderer.invoke('asr:start', opts),
+  asrStop: () => ipcRenderer.invoke('asr:stop'),
+  asrLanguage: (language) => ipcRenderer.invoke('asr:language', language),
+  asrAudio: (samples) => ipcRenderer.send('asr:audio', samples),
+  onAsr: (callback) => ipcRenderer.on('asr:event', (e, message) => callback(message)),
   logWrite: (level, message) => ipcRenderer.invoke('log:write', level, message)
 });

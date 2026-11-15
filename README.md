@@ -29,6 +29,16 @@ recorded, so the preview is exactly what ends up in the file.
 - **Device telemetry**: camera resolution, measured frame rate, free disk space, and NVIDIA GPU
   load, temperature and memory (read from `nvidia-smi` when it is available).
 - **Audio metering**: level, peak hold and a live spectrum from the microphone.
+- **Speaker analysis** (optional, new and still being tested): a face tracking frame, head
+  pose, an eye contact percentage and a talk ratio, computed on your device with MediaPipe.
+- **Live captions** (optional, new and still being tested): speech is transcribed on your
+  device with Whisper, shown at the bottom of the frame and saved as an `.srt` file. Includes a
+  speaking rate readout and keyword callouts for words you choose.
+- **Chapter markers**: press the flag button or `M` while recording. The chapter list is saved
+  as a text file next to the video, in the format video sites accept.
+- **Full control in Settings**: resolution (720p to 4K), frame rate, video and audio bitrate,
+  file format, camera mirroring and framing; a switch for every HUD element; accent, text and
+  recording colours, opacity and typeface; units; caption size and timing.
 - **Environment panel**: location, weather, humidity, wind, air quality, sunrise and sunset for a
   city you choose.
 - **News ticker**: headlines from any RSS or Atom feed, rotating at the top of the frame.
@@ -54,7 +64,7 @@ The builds are not code signed yet:
 | Platform | Status |
 | --- | --- |
 | Windows 10 and 11 | Developed and tested here |
-| macOS (Intel and Apple silicon) | Supported in code and built by CI, but not yet tested on real hardware. Reports welcome |
+| macOS (Apple silicon) | Supported in code and built by CI, but not yet tested on real hardware. Reports welcome |
 | Linux | Not supported yet |
 
 GPU readouts need an NVIDIA GPU with `nvidia-smi` available, so they are hidden on Macs.
@@ -77,9 +87,9 @@ then starts the app. On macOS, the system asks for camera and microphone access 
 
 1. Type your name and the topic of the log in the bar at the bottom. Both appear on the name
    plate and are remembered.
-2. Open **Settings** (the sliders icon) to choose the camera and microphone, set a city for the
-   environment panel, set a news feed, or change the language. Press Enter in a text field to
-   apply it.
+2. Open **Settings** (the sliders icon). The tabs cover devices, recording, HUD elements,
+   appearance, weather and news, speech features and general options. Changes show in the
+   preview immediately. Recording options are locked while a recording is running.
 3. Press the round button to start recording and again to stop.
 
 Recordings are saved to `Videos\HUD-Logs` on Windows and `Movies/HUD-Logs` on macOS. The folder
@@ -90,7 +100,7 @@ icon in the bar opens it.
 | What | Where |
 | --- | --- |
 | Name, topic, city, feed URL, log counter and log list | `index.json` in the `HUD-Logs` folder |
-| Chosen camera, microphone and language | The app's local storage |
+| All other settings, plus the chosen camera, microphone and language | The app's local storage |
 
 Delete `index.json` to reset the log counter and the day counter.
 
@@ -117,8 +127,11 @@ requests, and only these:
 | [Open-Meteo](https://open-meteo.com) geocoding | When you set a city | The city name you typed |
 | Open-Meteo forecast and air quality | Every 10 minutes while a city is set | That city's coordinates |
 | Your news feed URL | Every 10 minutes while a feed is set | A plain HTTP GET |
+| Hugging Face (`huggingface.co`) | Once per caption model, the first time you switch on live captions | A plain download of the Whisper model, roughly 80 to 250 MB |
+| Google storage (`storage.googleapis.com`) | Once, the first time you switch on speaker analysis | A plain download of the MediaPipe face model, about 4 MB |
 
-Leave the city and the feed URL empty to keep the app fully offline. The default feed is a BBC
+Leave the city and the feed URL empty, and speaker analysis and live captions off, to keep the
+app fully offline. Both features run on your device; no audio, video or face data leaves it. The default feed is a BBC
 feed chosen by system language; clear the field to turn news off.
 
 Anything shown on the HUD is recorded into the video, including the city name. Check the frame
@@ -131,7 +144,8 @@ Open-Meteo is free for non-commercial use; see their terms if you plan to use th
 ```
 src/
   main/        Main process: window, file output, log index, GPU stats, weather, news
-    lib/       Pure helpers with unit tests (dates, feed parsing, nvidia-smi parsing, logger)
+    lib/       Pure helpers with unit tests (dates, feeds, nvidia-smi, logger, chapters and subtitles)
+    asr-worker.js  Speech recognition, run in a separate utility process
   preload/     The IPC bridge exposed to the page as window.api
   renderer/    The page: capture, HUD drawing, recording, i18n, styles
 test/          Unit tests (node:test, no dependencies)
@@ -159,8 +173,9 @@ scaled to 1080p. Strings live in `src/renderer/i18n.js`.
 
 - [x] **Stage 1**: camera capture, HUD compositing, MP4 recording, log numbering, environment
       panel, news ticker
-- [ ] **Stage 2**: speaker analysis: face tracking frame, head pose, eye contact, speaking rate
-- [ ] **Stage 3**: live captions, keyword callouts, chapter markers
+- [ ] **Stage 2** (in testing): speaker analysis: face tracking frame, head pose, eye contact,
+      talk ratio. Speaking rate in words per minute arrives with captions in Stage 3
+- [ ] **Stage 3** (in testing): live captions, keyword callouts, chapter markers, speaking rate
 - [ ] **Stage 4**: screen recording mode with a camera inset
 - [ ] **Stage 5**: FFmpeg/NVENC encoding option, HUD themes, signed installers
 

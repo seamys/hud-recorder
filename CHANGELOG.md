@@ -4,6 +4,23 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-11-15
+
+### Added
+
+- Optional speaker analysis: face tracking frame, head pose, eye contact percentage and talk
+  ratio, using MediaPipe Face Landmarker on the device. Off by default.
+- Optional live captions transcribed on the device with Whisper, saved as `.srt`, with a
+  speaking rate readout and keyword callouts. Off by default.
+- Chapter markers (flag button or `M`), saved as a chapter list next to the video.
+- Settings panel covering every recording and display option: resolution, frame rate, bitrates,
+  format, mirroring, a switch per HUD element, colours, opacity, typeface, units and captions.
+- Redesigned window: custom title bar, centred record control, slide-out settings drawer.
+
+### Changed
+
+- Weather requests wait up to 15 seconds and retry once.
+
 ## [0.2.0] - 2026-11-15
 
 ### Added
