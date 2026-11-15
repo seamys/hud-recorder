@@ -1,6 +1,6 @@
 {
   "name": "hud-recorder",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Video log recorder for Windows, macOS and Linux that burns a sci-fi style HUD overlay into the recording.",
   "main": "src/main/main.js",
   "author": "seamys",

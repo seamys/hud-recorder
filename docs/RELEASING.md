@@ -7,8 +7,8 @@ Releases are built by GitHub Actions. Nothing needs to be built on your own mach
 3. Tag the commit and push the tag:
 
    ```bash
-   git tag v0.4.0
-   git push origin v0.4.0
+   git tag v0.5.0
+   git push origin v0.5.0
    ```
 
 4. The **Release** workflow builds four installers in parallel, each on its own runner:

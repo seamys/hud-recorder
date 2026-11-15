@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.5.0] - 2026-11-15
 
 ### Added
 
@@ -14,6 +14,11 @@ All notable changes to this project are documented here. The format follows
   row of the environment panel.
 - Configurable output folder for recordings.
 - Light interface theme modelled on VS Code, with a dark alternative in Settings.
+
+### Fixed
+
+- Restored main-process handlers (logging, captions, face and hand models) that an earlier edit
+  had removed, and added a test that checks every bridge channel has a handler.
 
 ### Changed
 
