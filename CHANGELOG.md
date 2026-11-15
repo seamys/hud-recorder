@@ -10,7 +10,7 @@ All notable changes to this project are documented here. The format follows
 
 - Optional hand tracking: a live skeleton for both hands, left and right labels, a rule-based
   gesture name and a position readout. Off by default.
-- Eye analysis in speaker analysis: iris rings, gaze direction and blink rate.
+- Eye analysis in speaker analysis: gaze direction and blink rate, with optional iris markers.
 
 ### Changed
 

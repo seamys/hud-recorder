@@ -473,29 +473,38 @@
     ctx.stroke();
     ctx.restore();
 
+    // Readouts go under the face frame, or above it when that space belongs to the captions
+    // and name plate.
     const deg = (v) => (v >= 0 ? '+' : '') + v.toFixed(1) + '°';
-    text(t('hud.faceLocked'), x0, y0 - 20, 11, AC, { ls: 2 });
-    text(t('hud.pose', { y: deg(f.yaw), p: deg(f.pitch), r: deg(f.roll) }), x0, y1 + 8, 11, DIM, { ls: 2 });
-
-    // Eyes: a ring on each iris, the gaze direction and the blink rate.
+    const lines = [t('hud.pose', { y: deg(f.yaw), p: deg(f.pitch), r: deg(f.roll) })];
     if (f.eyes) {
-      ctx.strokeStyle = AC; ctx.lineWidth = 1.2;
-      f.eyes.forEach((e) => {
-        const r = Math.max(3, e.r * fit.dh / S * 1.6);
-        const ex = gx(e.x), ey = gy(e.y);
-        ctx.beginPath(); ctx.arc(ex, ey, r, 0, Math.PI * 2); ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(ex - r - 5, ey); ctx.lineTo(ex - r - 1, ey);
-        ctx.moveTo(ex + r + 1, ey); ctx.lineTo(ex + r + 5, ey);
-        ctx.stroke();
-      });
       // A glance to the image's left is the same direction on screen unless the picture is mirrored.
       let dir = f.gaze;
       if (mirror && (dir === 'left' || dir === 'right')) dir = dir === 'left' ? 'right' : 'left';
       const rate = window.faceTracker.blinkRate;
-      const gazeLabel = t('hud.gaze', { d: t('hud.gaze_' + dir) });
-      const blinkLabel = rate === null ? '' : '  ' + t('hud.blinks', { n: Math.round(rate) });
-      text(gazeLabel + blinkLabel, x0, y1 + 26, 11, f.gaze === 'center' ? AC : DIM, { ls: 2 });
+      lines.push(t('hud.gaze', { d: t('hud.gaze_' + dir) }) + (rate === null ? '' : '  ' + t('hud.blinks', { n: Math.round(rate) })));
+    }
+    const below = y1 + 8 + lines.length * 18 < 530;
+    if (below) {
+      text(t('hud.faceLocked'), x0, y0 - 20, 11, AC, { ls: 2 });
+      lines.forEach((ln, i) => text(ln, x0, y1 + 8 + i * 18, 11, DIM, { ls: 2 }));
+    } else {
+      const top = Math.max(104, y0 - 20 - lines.length * 18);
+      text(t('hud.faceLocked'), x0, top, 11, AC, { ls: 2 });
+      lines.forEach((ln, i) => text(ln, x0, top + 18 + i * 18, 11, DIM, { ls: 2 }));
+    }
+
+    // Optional iris markers: a short tick under each eye that follows the iris sideways.
+    // Deliberately not drawn on the eye itself, which reads as unsettling on a face.
+    if (f.eyes && show('eyes')) {
+      ctx.strokeStyle = AC; ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      f.eyes.forEach((e) => {
+        const r = Math.max(3, e.r * fit.dh / S);
+        const ex = gx(e.x), ey = gy(e.y) + r * 3.2;
+        ctx.moveTo(ex - r, ey); ctx.lineTo(ex + r, ey);
+      });
+      ctx.stroke();
     }
   }
 

@@ -35,6 +35,7 @@
     'hud.news': true,
     'hud.speaker': true,
     'hud.faceFrame': true,
+    'hud.eyes': false,
     'hud.hands': true,
     'hud.captions': true,
     'hud.chips': true,
@@ -121,6 +122,7 @@
         { type: 'group', label: 'set.groupSpeech' },
         toggle('hud.speaker', 'set.speaker'),
         toggle('hud.faceFrame', 'set.faceFrame'),
+        toggle('hud.eyes', 'set.eyesEl', { sub: true }),
         toggle('hud.hands', 'set.handsEl'),
         toggle('hud.captions', 'set.captionsEl'),
         toggle('hud.chips', 'set.chips')
