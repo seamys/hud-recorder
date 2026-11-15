@@ -30,7 +30,11 @@ recorded, so the preview is exactly what ends up in the file.
   load, temperature and memory (read from `nvidia-smi` when it is available).
 - **Audio metering**: level, peak hold and a live spectrum from the microphone.
 - **Speaker analysis** (optional, new and still being tested): a face tracking frame, head
-  pose, an eye contact percentage and a talk ratio, computed on your device with MediaPipe.
+  pose, iris tracking with gaze direction and blink rate, an eye contact percentage and a talk
+  ratio, computed on your device with MediaPipe.
+- **Hand tracking** (optional, new and still being tested): both hands drawn as a live 21-point
+  skeleton, with left or right labels, a gesture name (open, fist, point, peace, thumb up,
+  pinch, OK, or a finger count) and the hand's position in the frame.
 - **Live captions** (optional, new and still being tested): speech is transcribed on your
   device with Whisper, shown at the bottom of the frame and saved as an `.srt` file. Includes a
   speaking rate readout and keyword callouts for words you choose.
@@ -128,7 +132,7 @@ requests, and only these:
 | Open-Meteo forecast and air quality | Every 10 minutes while a city is set | That city's coordinates |
 | Your news feed URL | Every 10 minutes while a feed is set | A plain HTTP GET |
 | Hugging Face (`huggingface.co`) | Once per caption model, the first time you switch on live captions | A plain download of the Whisper model, roughly 80 to 250 MB |
-| Google storage (`storage.googleapis.com`) | Once, the first time you switch on speaker analysis | A plain download of the MediaPipe face model, about 4 MB |
+| Google storage (`storage.googleapis.com`) | Once each, the first time you switch on speaker analysis or hand tracking | A plain download of the MediaPipe face model (about 4 MB) or hand model (about 8 MB) |
 
 Leave the city and the feed URL empty, and speaker analysis and live captions off, to keep the
 app fully offline. Both features run on your device; no audio, video or face data leaves it. The default feed is a BBC

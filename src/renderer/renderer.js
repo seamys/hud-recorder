@@ -283,6 +283,22 @@
     }
   }
 
+  async function setHands(on) {
+    if (!on) {
+      window.handTracker.stop();
+      setStatus('status.handsOff');
+      return;
+    }
+    setStatus('status.handsLoading');
+    try {
+      await window.handTracker.start();
+      setStatus('status.handsOn');
+    } catch (err) {
+      cfg.sync('speech.hands', false);
+      setStatus('status.handsFail', { error: err && err.message ? err.message : t('status.unknown') });
+    }
+  }
+
   function markChapter() {
     if (!recording) return;
     marks.push((performance.now() - recStart) / 1000);
@@ -460,6 +476,66 @@
     const deg = (v) => (v >= 0 ? '+' : '') + v.toFixed(1) + '°';
     text(t('hud.faceLocked'), x0, y0 - 20, 11, AC, { ls: 2 });
     text(t('hud.pose', { y: deg(f.yaw), p: deg(f.pitch), r: deg(f.roll) }), x0, y1 + 8, 11, DIM, { ls: 2 });
+
+    // Eyes: a ring on each iris, the gaze direction and the blink rate.
+    if (f.eyes) {
+      ctx.strokeStyle = AC; ctx.lineWidth = 1.2;
+      f.eyes.forEach((e) => {
+        const r = Math.max(3, e.r * fit.dh / S * 1.6);
+        const ex = gx(e.x), ey = gy(e.y);
+        ctx.beginPath(); ctx.arc(ex, ey, r, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(ex - r - 5, ey); ctx.lineTo(ex - r - 1, ey);
+        ctx.moveTo(ex + r + 1, ey); ctx.lineTo(ex + r + 5, ey);
+        ctx.stroke();
+      });
+      // A glance to the image's left is the same direction on screen unless the picture is mirrored.
+      let dir = f.gaze;
+      if (mirror && (dir === 'left' || dir === 'right')) dir = dir === 'left' ? 'right' : 'left';
+      const rate = window.faceTracker.blinkRate;
+      const gazeLabel = t('hud.gaze', { d: t('hud.gaze_' + dir) });
+      const blinkLabel = rate === null ? '' : '  ' + t('hud.blinks', { n: Math.round(rate) });
+      text(gazeLabel + blinkLabel, x0, y1 + 26, 11, f.gaze === 'center' ? AC : DIM, { ls: 2 });
+    }
+  }
+
+  // Hand skeletons with a gesture label and a position readout per hand.
+  const GESTURE_KEYS = { open: 'hud.gOpen', fist: 'hud.gFist', point: 'hud.gPoint', peace: 'hud.gPeace', rock: 'hud.gRock', thumb: 'hud.gThumb', pinch: 'hud.gPinch', ok: 'hud.gOk' };
+  function drawHands(list) {
+    const mirror = !!cfg.get('video.mirror');
+    const gx = (nx) => (fit.ox + (mirror ? 1 - nx : nx) * fit.dw) / S;
+    const gy = (ny) => (fit.oy + ny * fit.dh) / S;
+    const tracker = window.handTracker;
+    list.forEach((h) => {
+      const pts = h.lm.map((p) => [gx(p.x), gy(p.y)]);
+
+      // Bones
+      ctx.strokeStyle = AC; ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      tracker.CONNECTIONS.forEach((c) => { ctx.moveTo(pts[c[0]][0], pts[c[0]][1]); ctx.lineTo(pts[c[1]][0], pts[c[1]][1]); });
+      ctx.stroke();
+
+      // Joints, with larger markers on the fingertips
+      ctx.fillStyle = FG;
+      pts.forEach((p) => ctx.fillRect(p[0] - 1.5, p[1] - 1.5, 3, 3));
+      const names = ['thumb', 'index', 'middle', 'ring', 'pinky'];
+      tracker.TIPS.forEach((i, n) => {
+        const on = h.fingers[names[n]];
+        ctx.strokeStyle = on ? AC : DIM; ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.arc(pts[i][0], pts[i][1], on ? 5 : 3.5, 0, Math.PI * 2); ctx.stroke();
+      });
+
+      // Label above the hand, position below it
+      const xa = gx(h.box.x0), xb = gx(h.box.x1);
+      const x0 = Math.min(xa, xb), y0 = gy(h.box.y0), y1 = gy(h.box.y1);
+      // With a mirrored picture the person's right hand appears on the right of the frame,
+      // but it is still their right hand, so the label does not change.
+      const side = t(h.side === 'left' ? 'hud.handLeft' : h.side === 'right' ? 'hud.handRight' : 'hud.hand');
+      const gesture = GESTURE_KEYS[h.gesture] ? t(GESTURE_KEYS[h.gesture]) : t('hud.gCount', { n: h.count });
+      text(side + ' · ' + gesture, x0, y0 - 22, 11, AC, { ls: 2 });
+      const px = Math.round((mirror ? 1 - h.center.x : h.center.x) * 100), py = Math.round(h.center.y * 100);
+      text('X ' + px + '%  Y ' + py + '%', x0, y1 + 10, 11, DIM, { ls: 2 });
+    });
   }
 
   function drawHud(now) {
@@ -555,6 +631,7 @@
       }
     }
     if (show('faceFrame') && faceOn && tracker.face) drawFace(tracker.face);
+    if (show('hands') && window.handTracker.state === 'on' && window.handTracker.hands.length) drawHands(window.handTracker.hands);
 
     // Right column: audio
     y = 150;
@@ -706,6 +783,7 @@
         ctx.drawImage(video, fit.ox, fit.oy, dw, dh);
       }
       window.faceTracker.update(video, now);
+      window.handTracker.update(video, now);
     }
     ctx.setTransform(S, 0, 0, S, 0, 0);
     if (!hasVideo) text(t('hud.noCamera'), 640, 352, 14, '#9FB0B5', { ls: 2, align: 'center' });
@@ -803,6 +881,7 @@
       else if (key === 'info.city') applyCity();
       else if (key === 'info.feed') applyFeed();
       else if (key === 'speech.face') setFace(!!value);
+      else if (key === 'speech.hands') setHands(!!value);
       else if (key === 'speech.captions') setCaptions(!!value);
       else if (key === 'speech.capModel') { if (cfg.get('speech.captions')) setCaptions(true); }
       else if (key === 'speech.capLang') { capLanguage = value; spoken = []; window.api.asrLanguage(value); }
@@ -814,6 +893,7 @@
       else if (action === 'reset' && !recording) { cfg.reset(); location.reload(); }
     });
     if (cfg.get('speech.face')) setFace(true);
+    if (cfg.get('speech.hands')) setHands(true);
     if (cfg.get('speech.captions')) setCaptions(true);
 
     // Language

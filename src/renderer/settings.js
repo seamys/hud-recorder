@@ -35,6 +35,7 @@
     'hud.news': true,
     'hud.speaker': true,
     'hud.faceFrame': true,
+    'hud.hands': true,
     'hud.captions': true,
     'hud.chips': true,
     'hud.chapter': true,
@@ -52,6 +53,7 @@
     'info.newsSeconds': 8,
 
     'speech.face': false,
+    'speech.hands': false,
     'speech.captions': false,
     'speech.capLang': '',
     'speech.capModel': 'fast',
@@ -119,6 +121,7 @@
         { type: 'group', label: 'set.groupSpeech' },
         toggle('hud.speaker', 'set.speaker'),
         toggle('hud.faceFrame', 'set.faceFrame'),
+        toggle('hud.hands', 'set.handsEl'),
         toggle('hud.captions', 'set.captionsEl'),
         toggle('hud.chips', 'set.chips')
       ]
@@ -150,6 +153,7 @@
       id: 'speech',
       items: [
         toggle('speech.face', 'ui.face', { hint: 'ui.faceHint' }),
+        toggle('speech.hands', 'ui.hands', { hint: 'ui.handsHint' }),
         toggle('speech.captions', 'ui.captions', { hint: 'ui.captionsHint' }),
         { type: 'select', key: 'speech.capLang', label: 'ui.capLang', options: [
           { v: 'chinese', text: '中文' }, { v: 'english', text: 'English' }] },

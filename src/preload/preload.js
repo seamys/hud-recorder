@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('api', {
   openDir: () => ipcRenderer.invoke('open:dir'),
   openLogs: () => ipcRenderer.invoke('open:logs'),
   faceModel: () => ipcRenderer.invoke('face:model'),
+  handModel: () => ipcRenderer.invoke('hand:model'),
   asrStart: (opts) => ipcRenderer.invoke('asr:start', opts),
   asrStop: () => ipcRenderer.invoke('asr:stop'),
   asrLanguage: (language) => ipcRenderer.invoke('asr:language', language),

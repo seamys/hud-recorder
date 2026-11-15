@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Optional hand tracking: a live skeleton for both hands, left and right labels, a rule-based
+  gesture name and a position readout. Off by default.
+- Eye analysis in speaker analysis: iris rings, gaze direction and blink rate.
+
+### Changed
+
+- Eye contact is now judged from the iris position within the eye and from where the nose sits
+  in the face, instead of from the head pose matrix, so glances are detected without a head turn.
+
 ## [0.3.0] - 2026-11-15
 
 ### Added

@@ -15,6 +15,7 @@ const { formatChapters, formatSrt } = require('./lib/sidecar');
 const REFRESH_MS = 10 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 15000;
 const ASR_MODELS = { fast: 'Xenova/whisper-base', accurate: 'Xenova/whisper-small' };
+const HAND_MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
 const FACE_MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
 
 let win = null;
@@ -378,26 +379,29 @@ ipcMain.handle('asr:language', (e, language) => {
 
 ipcMain.handle('asr:stop', () => { stopAsr(); return true; });
 
-// Speaker analysis model: downloaded once into the app's data folder, then served from disk.
-ipcMain.handle('face:model', async () => {
+// MediaPipe models: downloaded once into the app's data folder, then served from disk.
+async function loadModel(name, url) {
   const dir = path.join(app.getPath('userData'), 'models');
-  const file = path.join(dir, 'face_landmarker.task');
+  const file = path.join(dir, name);
   try {
     return fs.readFileSync(file);
   } catch (e) {
-    log.info('downloading the face model from', FACE_MODEL_URL);
+    log.info('downloading model', name, 'from', url);
   }
-  const r = await fetch(FACE_MODEL_URL, { signal: AbortSignal.timeout(60000) });
+  const r = await fetch(url, { signal: AbortSignal.timeout(60000) });
   if (!r.ok) {
-    log.error('face model download failed: HTTP ' + r.status);
+    log.error('model download failed for ' + name + ': HTTP ' + r.status);
     throw new Error('HTTP ' + r.status);
   }
   const buf = Buffer.from(await r.arrayBuffer());
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(file, buf);
-  log.info('face model saved (' + buf.length + ' bytes)');
+  log.info('model saved:', name, '(' + buf.length + ' bytes)');
   return buf;
-});
+}
+
+ipcMain.handle('face:model', () => loadModel('face_landmarker.task', FACE_MODEL_URL));
+ipcMain.handle('hand:model', () => loadModel('hand_landmarker.task', HAND_MODEL_URL));
 
 ipcMain.handle('open:logs', () => shell.openPath(log.dir));
 
