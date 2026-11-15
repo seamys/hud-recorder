@@ -24,6 +24,11 @@ recorded, so the preview is exactly what ends up in the file.
 
 ## Features
 
+- **Screen recording** (new and still being tested): record a screen or a window, alone or
+  with the camera as an inset in a corner, rectangular or round.
+- **Floating control bar**: shrink the window to a small always-on-top strip with the record
+  button, timer, microphone level and chapter marker, for controlling a recording while you
+  work in other apps.
 - **Live HUD overlay** recorded into the video: recording state, log number, timecode, date and
   time, name plate, and a day counter.
 - **Device telemetry**: camera resolution, measured frame rate, free disk space, and NVIDIA GPU
@@ -183,7 +188,7 @@ scaled to 1080p. Strings live in `src/renderer/i18n.js`.
 - [ ] **Stage 2** (in testing): speaker analysis: face tracking frame, head pose, eye contact,
       talk ratio. Speaking rate in words per minute arrives with captions in Stage 3
 - [ ] **Stage 3** (in testing): live captions, keyword callouts, chapter markers, speaking rate
-- [ ] **Stage 4**: screen recording mode with a camera inset
+- [ ] **Stage 4** (in testing): screen recording mode with a camera inset
 - [ ] **Stage 5**: FFmpeg/NVENC encoding option, HUD themes, signed installers
 
 ## Known limitations

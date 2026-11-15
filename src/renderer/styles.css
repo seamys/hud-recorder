@@ -192,6 +192,35 @@ canvas { display: block; width: 100%; height: 100%; object-fit: contain; }
 .icon[aria-expanded="true"] { background: var(--active); }
 .icon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 
+/* ---------- floating control bar ---------- */
+
+#meter { display: none; flex: none; width: 84px; height: 4px; margin-right: 8px; border-radius: 2px; background: var(--line2); overflow: hidden; }
+#meter i { display: block; width: 0; height: 100%; background: var(--ac); }
+
+body.compact #titlebar,
+body.compact #stagewrap,
+body.compact #bar .left,
+body.compact #status,
+body.compact #open,
+body.compact #gear { display: none; }
+
+/* The whole strip drags the window; the right-hand gap is left for the system window buttons. */
+body.compact #bar {
+  flex: 1;
+  height: auto;
+  border-top: 0;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  padding: 0 148px 0 12px;
+  -webkit-app-region: drag;
+}
+body.mac.compact #bar { padding: 0 12px 0 84px; }
+body.compact #bar button { -webkit-app-region: no-drag; }
+body.compact #bar .center { grid-template-columns: auto auto auto; gap: 10px; }
+body.compact #rec { width: 36px; height: 36px; }
+body.compact #meter { display: block; }
+body.compact #compact { color: var(--fg); background: var(--active); }
+
 /* ---------- settings drawer ---------- */
 
 #drawer {

@@ -9,6 +9,10 @@
   const STORE_KEY = 'settings.v1';
 
   const DEFAULTS = {
+    'video.source': 'camera',
+    'video.insetPos': 'br',
+    'video.insetSize': 24,
+    'video.insetShape': 'rect',
     'video.resolution': '1080p',
     'video.fps': 60,
     'video.bitrate': 8,
@@ -105,6 +109,16 @@
           { action: 'chooseDir', label: 'set.choose' },
           { action: 'resetDir', label: 'set.useDefault' },
           { action: 'openDir', label: 'set.reveal' }] },
+        { type: 'group', label: 'set.groupSource' },
+        { type: 'select', key: 'video.source', label: 'set.source', lock: true, options: [
+          { v: 'camera', k: 'set.srcCamera' }, { v: 'both', k: 'set.srcBoth' }, { v: 'screen', k: 'set.srcScreen' }] },
+        { type: 'select', id: 'screenSrc', label: 'set.screenSrc', lock: true, wide: true, hint: 'set.screenHint' },
+        { type: 'select', key: 'video.insetPos', label: 'set.insetPos', options: [
+          { v: 'br', k: 'set.posBR' }, { v: 'bl', k: 'set.posBL' }, { v: 'tr', k: 'set.posTR' }, { v: 'tl', k: 'set.posTL' }] },
+        { type: 'range', key: 'video.insetSize', label: 'set.insetSize', min: 12, max: 45, step: 1, unit: '%' },
+        { type: 'select', key: 'video.insetShape', label: 'set.insetShape', options: [
+          { v: 'rect', k: 'set.shapeRect' }, { v: 'circle', k: 'set.shapeCircle' }] },
+        { type: 'group', label: 'set.groupQuality' },
         { type: 'select', key: 'video.resolution', label: 'set.resolution', lock: true, options: [
           { v: '720p', text: '720p · 1280 × 720' },
           { v: '1080p', text: '1080p · 1920 × 1080' },

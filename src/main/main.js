@@ -2,7 +2,7 @@
 
 // Main process: window, file output, log numbering, system stats, weather and news.
 
-const { app, BrowserWindow, Menu, dialog, ipcMain, session, shell, systemPreferences, utilityProcess } = require('electron');
+const { app, BrowserWindow, Menu, desktopCapturer, dialog, ipcMain, screen, session, shell, systemPreferences, utilityProcess } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { execFile } = require('child_process');
@@ -28,6 +28,8 @@ let outFile = null;
 let gpu = null;       // latest nvidia-smi reading, or null
 let asr = null;       // speech recognition utility process, or null
 let asrFinals = 0;
+let fullBounds = null;      // window bounds to return to when the floating bar is closed
+let screenSourceId = '';   // capture source chosen in Settings
 let gpuSeen = null;   // last logged availability, so the log records changes only
 
 // Replaced with the file logger once the app is ready and the log folder is known.
@@ -64,6 +66,12 @@ function readIndex() {
 function writeIndex(ix) {
   fs.mkdirSync(path.dirname(indexPath()), { recursive: true });
   fs.writeFileSync(indexPath(), JSON.stringify(ix, null, 2));
+}
+
+/** Create a folder if it is missing. Existing folders are left alone: asking Windows to
+ *  "create" a drive root such as D:\\ fails even though the folder is perfectly usable. */
+function ensureDir(dir) {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
 /** Folder recordings are saved to: the user's choice, or Videos/HUD-Logs. */
@@ -219,7 +227,7 @@ ipcMain.handle('log:saveProfile', (e, name, topic) => {
 ipcMain.handle('rec:start', (e, ext) => {
   if (out) throw new Error('already recording');
   const ix = readIndex();
-  fs.mkdirSync(outDir(), { recursive: true });
+  ensureDir(outDir());
   outFile = path.join(outDir(), logFileName(ix.count + 1, ext));
   out = fs.createWriteStream(outFile);
   out.on('error', (err) => log.error('output stream error', err));
@@ -297,7 +305,7 @@ ipcMain.handle('rec:abort', () => new Promise((resolve) => {
 ipcMain.handle('sys:stats', async () => {
   let freeBytes = null;
   try {
-    fs.mkdirSync(outDir(), { recursive: true });
+    ensureDir(outDir());
     const s = await fs.promises.statfs(outDir());
     freeBytes = Number(s.bavail) * Number(s.bsize);
   } catch (e) {
@@ -451,6 +459,32 @@ ipcMain.handle('hand:model', () => loadModel('hand_landmarker.task', HAND_MODEL_
 
 ipcMain.handle('open:logs', () => shell.openPath(log.dir));
 
+// Screen recording: list the screens and windows that can be captured.
+ipcMain.handle('screen:sources', async () => {
+  try {
+    const sources = await desktopCapturer.getSources({ types: ['screen', 'window'], thumbnailSize: { width: 0, height: 0 } });
+    log.info('screen sources found:', sources.length);
+    return sources.map((s) => ({ id: s.id, name: s.name, screen: s.id.indexOf('screen:') === 0 }));
+  } catch (err) {
+    log.warn('could not list screen sources:', err.message);
+    return [];
+  }
+});
+
+ipcMain.handle('screen:select', (e, id) => {
+  screenSourceId = String(id || '');
+  return true;
+});
+
+// While the screen is being captured, hide this window from the capture. Otherwise the preview
+// would show the screen, which shows the preview, and so on.
+ipcMain.handle('screen:protect', (e, on) => {
+  if (win && !win.isDestroyed()) {
+    try { win.setContentProtection(!!on); } catch (err) { log.warn('content protection failed:', err.message); }
+  }
+  return true;
+});
+
 // Let the user pick where recordings are saved. Refused while a recording is being written.
 ipcMain.handle('out:choose', async () => {
   if (out) return { ok: false, error: 'RECORDING' };
@@ -461,7 +495,7 @@ ipcMain.handle('out:choose', async () => {
   if (res.canceled || !res.filePaths[0]) return { ok: false, canceled: true };
   const dir = res.filePaths[0];
   try {
-    fs.mkdirSync(dir, { recursive: true });
+    ensureDir(dir);
     fs.accessSync(dir, fs.constants.W_OK);
   } catch (err) {
     log.warn('chosen output folder is not writable:', dir, err.message);
@@ -483,6 +517,44 @@ ipcMain.handle('out:reset', () => {
   return { ok: true, dir: outDir() };
 });
 
+// Floating control bar: shrink the window to a small always-on-top strip, or restore it.
+// The same window is reused on purpose. It stays visible, so drawing and recording carry on;
+// a minimised window would stop producing frames.
+const COMPACT = { width: 470, height: 56 };
+const FULL_MIN = { width: 960, height: 640 };
+ipcMain.handle('ui:compact', (e, on) => {
+  if (!win || win.isDestroyed()) return false;
+  try {
+    if (on) {
+      if (win.isFullScreen()) win.setFullScreen(false);
+      if (win.isMaximized()) win.unmaximize();
+      fullBounds = win.getBounds();
+      const area = screen.getDisplayMatching(fullBounds).workArea;
+      win.setMinimumSize(COMPACT.width, COMPACT.height);
+      win.setBounds({
+        x: area.x + area.width - COMPACT.width - 24,
+        y: area.y + area.height - COMPACT.height - 24,
+        width: COMPACT.width,
+        height: COMPACT.height
+      });
+      win.setResizable(false);
+      win.setMaximizable(false);
+      win.setAlwaysOnTop(true, 'floating');
+    } else {
+      win.setAlwaysOnTop(false);
+      win.setResizable(true);
+      win.setMaximizable(true);
+      win.setMinimumSize(FULL_MIN.width, FULL_MIN.height);
+      if (fullBounds) win.setBounds(fullBounds);
+    }
+    log.info('floating control bar', on ? 'on' : 'off');
+    return true;
+  } catch (err) {
+    log.warn('could not switch the floating control bar:', err.message);
+    return false;
+  }
+});
+
 // Keep the system window buttons in step with the interface theme.
 ipcMain.handle('ui:theme', (e, theme) => {
   if (win && !win.isDestroyed() && process.platform !== 'darwin') {
@@ -496,7 +568,7 @@ ipcMain.handle('ui:theme', (e, theme) => {
 });
 
 ipcMain.handle('open:dir', () => {
-  fs.mkdirSync(outDir(), { recursive: true });
+  ensureDir(outDir());
   return shell.openPath(outDir());
 });
 
@@ -506,8 +578,8 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1360,
     height: 900,
-    minWidth: 960,
-    minHeight: 640,
+    minWidth: FULL_MIN.width,
+    minHeight: FULL_MIN.height,
     backgroundColor: '#F3F3F3',
     // The page draws its own title bar; the system window buttons sit on top of it.
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
@@ -547,8 +619,29 @@ app.whenReady().then(async () => {
     ', Electron ' + process.versions.electron + ', locale ' + app.getLocale());
 
   // The app only ever needs camera and microphone access.
-  session.defaultSession.setPermissionRequestHandler((wc, permission, cb) => cb(permission === 'media'));
-  session.defaultSession.setPermissionCheckHandler((wc, permission) => permission === 'media');
+  // Camera, microphone and screen capture are the only permissions the app ever needs.
+  const allowed = (permission) => permission === 'media' || permission === 'display-capture';
+  session.defaultSession.setPermissionRequestHandler((wc, permission, cb) => cb(allowed(permission)));
+  session.defaultSession.setPermissionCheckHandler((wc, permission) => allowed(permission));
+
+  // Screen capture requests from the page are answered here with the source chosen in Settings,
+  // so no system picker is shown.
+  session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
+    desktopCapturer.getSources({ types: ['screen', 'window'], thumbnailSize: { width: 0, height: 0 } }).then((sources) => {
+      const pick = sources.find((s) => s.id === screenSourceId) ||
+        sources.find((s) => s.id.indexOf('screen:') === 0) || sources[0];
+      if (!pick) {
+        log.warn('screen capture requested but no source is available');
+        callback({});
+        return;
+      }
+      log.info('screen capture source:', pick.name, '(' + pick.id + ')');
+      callback({ video: pick });
+    }).catch((err) => {
+      log.warn('screen capture request failed:', err.message);
+      callback({});
+    });
+  });
 
   pollGpu();
   setInterval(pollGpu, 2000);

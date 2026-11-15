@@ -30,6 +30,12 @@
   video.muted = true;
   video.playsInline = true;
 
+  const screenVideo = document.createElement('video');
+  screenVideo.muted = true;
+  screenVideo.playsInline = true;
+  let screenStream = null, screenSel = null, screenError = '';
+  let insetBox = null;                  // camera inset on the design grid this frame, or null
+
   // Canvas size and HUD scale. The HUD is laid out on a 1280x720 grid and scaled to the canvas.
   let W = 1920, H = 1080, S = 1.5;
   // Look, refreshed from settings by readLook().
@@ -166,6 +172,112 @@
     if (captionsOn) attachPcm().catch((e) => logLine('warn', 'captions: could not attach to the microphone: ' + e.message));
   }
 
+  // ---------- screen capture ----------
+
+  async function fillScreens() {
+    const list = await window.api.screenSources();
+    const cur = screenSel.value || recall('screenId');
+    screenSel.textContent = '';
+    list.forEach((s) => {
+      const o = document.createElement('option');
+      o.value = s.id;
+      o.textContent = s.name;
+      screenSel.appendChild(o);
+    });
+    if (cur && [...screenSel.options].some((o) => o.value === cur)) screenSel.value = cur;
+  }
+
+  function stopScreen() {
+    stopTracks(screenStream);
+    screenStream = null;
+    screenVideo.srcObject = null;
+  }
+
+  async function startScreen() {
+    stopScreen();
+    screenError = '';
+    const id = screenSel.value;
+    if (!id) {
+      screenError = t('errors.NO_SOURCES');
+      logLine('warn', 'screen capture: the source list is empty');
+      return;
+    }
+    const rate = cfg.get('video.fps') === 30 ? 30 : 60;
+    try {
+      // Preferred path: the main process answers this request with the chosen source.
+      await window.api.selectScreen(id);
+      screenStream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: rate }, audio: false });
+    } catch (e1) {
+      logLine('warn', 'getDisplayMedia failed: ' + e1.name + ': ' + e1.message + '; trying the legacy capture path');
+      try {
+        screenStream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: id, maxFrameRate: rate } }
+        });
+      } catch (e2) {
+        screenStream = null;
+        screenError = e2.name + ': ' + e2.message;
+        logLine('error', 'screen capture failed: ' + screenError);
+        return;
+      }
+    }
+    screenVideo.srcObject = screenStream;
+    try { await screenVideo.play(); } catch (e) { /* play() can reject while the stream settles */ }
+    logLine('info', 'screen capture started: ' + (screenSel.selectedOptions[0] ? screenSel.selectedOptions[0].textContent : id));
+  }
+
+  // Start and stop the camera and the screen capture to match the chosen picture source.
+  async function applySource() {
+    const source = cfg.get('video.source');
+    const needScreen = source === 'both' || source === 'screen';
+    const needCamera = source !== 'screen';
+    try { window.api.protectWindow(needScreen); } catch (e) { /* cosmetic only */ }
+    if (needScreen) { await fillScreens(); await startScreen(); } else stopScreen();
+    if (needCamera) { if (!videoStream) await startVideo(); }
+    else { stopTracks(videoStream); videoStream = null; video.srcObject = null; }
+    reportDevices();
+  }
+
+  // Camera inset rectangle on the 1280x720 design grid, kept clear of the HUD's top and
+  // bottom bands.
+  function insetRect() {
+    const size = Math.max(12, Math.min(45, Number(cfg.get('video.insetSize')) || 24)) / 100;
+    const h = 1280 * size * 9 / 16;
+    const w = cfg.get('video.insetShape') === 'circle' ? h : 1280 * size;
+    const pos = String(cfg.get('video.insetPos') || 'br');
+    return { x: pos[1] === 'l' ? 76 : 1216 - w, y: pos[0] === 't' ? 116 : 664 - h, w, h };
+  }
+
+  /** True when a HUD element at this box (design grid) would sit on or right next to the inset. */
+  function hitsInset(x0, y0, x1, y1) {
+    const b = insetBox, m = 12;
+    return !!b && !(x1 < b.x - m || x0 > b.x + b.w + m || y1 < b.y - m || y0 > b.y + b.h + m);
+  }
+
+  function drawInset() {
+    const r = insetRect();
+    const rx = r.x * S, ry = r.y * S, rw = r.w * S, rh = r.h * S;
+    const circle = cfg.get('video.insetShape') === 'circle';
+    const outline = () => {
+      ctx.beginPath();
+      if (circle) ctx.arc(rx + rw / 2, ry + rh / 2, rw / 2, 0, Math.PI * 2);
+      else ctx.rect(rx, ry, rw, rh);
+    };
+    const sc = Math.max(rw / video.videoWidth, rh / video.videoHeight);
+    const dw = video.videoWidth * sc, dh = video.videoHeight * sc;
+    fit = { ox: rx + (rw - dw) / 2, oy: ry + (rh - dh) / 2, dw, dh };
+    ctx.save();
+    outline();
+    ctx.clip();
+    if (cfg.get('video.mirror')) { ctx.translate(rx * 2 + rw, 0); ctx.scale(-1, 1); }
+    ctx.drawImage(video, fit.ox, fit.oy, dw, dh);
+    ctx.restore();
+    outline();
+    ctx.strokeStyle = rgba(FG, 0.85);
+    ctx.lineWidth = 1.5 * S;
+    ctx.stroke();
+  }
+
   async function fillDevices() {
     const list = await navigator.mediaDevices.enumerateDevices();
     const fill = (sel, kind, fallbackKey) => {
@@ -184,8 +296,12 @@
   }
 
   function reportDevices() {
-    setStatusText(t(videoStream ? 'status.camOk' : 'status.camNone') + ' · ' +
-      t(audioStream ? 'status.micOk' : 'status.micNone'));
+    const source = cfg.get('video.source');
+    const parts = [];
+    if (source !== 'camera') parts.push(screenStream ? t('status.screenOk') : t('status.screenNone') + (screenError ? ' (' + screenError + ')' : ''));
+    if (source !== 'screen') parts.push(t(videoStream ? 'status.camOk' : 'status.camNone'));
+    parts.push(t(audioStream ? 'status.micOk' : 'status.micNone'));
+    setStatusText(parts.join(' · '));
   }
 
   // ---------- live captions ----------
@@ -432,13 +548,17 @@
     ctx.strokeStyle = FG; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(x + 36 * dx, y); ctx.lineTo(x, y); ctx.lineTo(x, y + 36 * dy); ctx.stroke();
   }
+  // Panel rows and headings step aside for the camera inset rather than print over it.
   function row(x, y, label, value, align) {
+    const x0 = align === 'right' ? x - 190 : x;
+    if (hitsInset(x0, y, x0 + 190, y + 36)) return;
     text(label, x, y, 11, DIM, { ls: 2, align });
     text(value, x, y + 16, 15, FG, { align });
   }
   function section(x, y, label, align) {
-    text(label, x, y, 11, AC, { ls: 3, align });
     const x0 = align === 'right' ? x - 190 : x;
+    if (hitsInset(x0, y, x0 + 190, y + 24)) return;
+    text(label, x, y, 11, AC, { ls: 3, align });
     line(x0, y + 22, x0 + 190, y + 22, LINE, 1);
   }
   function fitText(s, maxWidth) {
@@ -618,7 +738,9 @@
     const vw = video.videoWidth, vh = video.videoHeight;
     if (show('device')) {
       const rows = [];
-      if (show('devCamera')) rows.push([t('hud.camera'), vw ? vw + ' × ' + vh : t('hud.notConnected')]);
+      const source = cfg.get('video.source');
+      if (show('devCamera') && source !== 'camera') rows.push([t('hud.screen'), screenVideo.videoWidth ? screenVideo.videoWidth + ' × ' + screenVideo.videoHeight : t('hud.notConnected')]);
+      if (show('devCamera') && source !== 'screen') rows.push([t('hud.camera'), vw ? vw + ' × ' + vh : t('hud.notConnected')]);
       if (show('devFps')) rows.push([t('hud.fps'), Math.round(fps) + ' FPS']);
       if (show('devStorage') && stats.freeBytes != null) rows.push([t('hud.storage'), (stats.freeBytes / 1073741824).toFixed(0) + ' GB']);
       if (show('devGpu') && stats.gpu) {
@@ -648,8 +770,11 @@
         row(64, y, t('hud.rate'), rate === null ? '—' : Math.round(rate) + ' ' + t(capLanguage === 'english' ? 'hud.wpm' : 'hud.cpm'));
       }
     }
-    if (show('faceFrame') && faceOn && tracker.face) drawFace(tracker.face);
-    if (show('hands') && window.handTracker.state === 'on' && window.handTracker.hands.length) drawHands(window.handTracker.hands);
+    // Face and hand overlays are drawn only over a full-frame camera; they would be unreadable
+    // at the size of the inset.
+    const fullCamera = cfg.get('video.source') === 'camera';
+    if (fullCamera && show('faceFrame') && faceOn && tracker.face) drawFace(tracker.face);
+    if (fullCamera && show('hands') && window.handTracker.state === 'on' && window.handTracker.hands.length) drawHands(window.handTracker.hands);
 
     // Right column: audio
     y = 150;
@@ -657,8 +782,10 @@
       section(1216, y, t('hud.audio'), 'right');
       y += 36;
       row(1216, y, t('hud.level'), analyser ? Math.round(levelDb) + ' dB' : t('hud.notConnected'), 'right');
-      ctx.fillStyle = rgba(FG, 0.2); ctx.fillRect(1096, y + 40, 120, 3);
-      ctx.fillStyle = AC; ctx.fillRect(1096, y + 40, 120 * (levelDb + 60) / 60, 3);
+      if (!hitsInset(1026, y, 1216, y + 44)) {
+        ctx.fillStyle = rgba(FG, 0.2); ctx.fillRect(1096, y + 40, 120, 3);
+        ctx.fillStyle = AC; ctx.fillRect(1096, y + 40, 120 * (levelDb + 60) / 60, 3);
+      }
       y += 58;
       row(1216, y, t('hud.peak'), analyser ? Math.round(peakDb) + ' dB' : '—', 'right');
       y += 66;
@@ -684,14 +811,14 @@
     }
 
     // Bottom left: name plate
-    if (show('nameplate')) {
+    if (show('nameplate') && !hitsInset(60, 606, 420, 664)) {
       line(61, 610, 61, 664, AC, 2);
       text(info.name || t('hud.yourName'), 76, 610, 22, FG, { weight: 700, ls: 1 });
       text(t('hud.day', { d: info.day, topic: info.topic || t('hud.topic') }), 76, 645, 13, DIM, { ls: 1 });
     }
 
     // Bottom right: spectrum
-    if (show('spectrum')) {
+    if (show('spectrum') && !hitsInset(1000, 596, 1220, 664)) {
       for (let i = 0; i < 28; i++) {
         const v = analyser ? freq[i + 1] / 255 : 0;
         const h = 2 + v * 42;
@@ -788,27 +915,47 @@
     ctx.globalAlpha = 1;
     ctx.fillStyle = '#10161A';
     ctx.fillRect(0, 0, W, H);
+    const source = cfg.get('video.source');
+    insetBox = null;
     const hasVideo = video.readyState >= 2 && video.videoWidth;
-    if (hasVideo) {
-      // Fit the camera frame into the canvas: "cover" crops, "contain" letterboxes.
-      const rx = W / video.videoWidth, ry = H / video.videoHeight;
-      const sc = cfg.get('video.fit') === 'contain' ? Math.min(rx, ry) : Math.max(rx, ry);
-      const dw = video.videoWidth * sc, dh = video.videoHeight * sc;
-      fit = { ox: (W - dw) / 2, oy: (H - dh) / 2, dw, dh };
-      if (cfg.get('video.mirror')) {
-        ctx.save();
-        ctx.translate(W, 0);
-        ctx.scale(-1, 1);
-        ctx.drawImage(video, fit.ox, fit.oy, dw, dh);
-        ctx.restore();
+    const hasScreen = screenVideo.readyState >= 2 && screenVideo.videoWidth;
+    let empty = null;
+    if (source === 'camera') {
+      if (hasVideo) {
+        // Fit the camera frame into the canvas: "cover" crops, "contain" letterboxes.
+        const rx = W / video.videoWidth, ry = H / video.videoHeight;
+        const sc = cfg.get('video.fit') === 'contain' ? Math.min(rx, ry) : Math.max(rx, ry);
+        const dw = video.videoWidth * sc, dh = video.videoHeight * sc;
+        fit = { ox: (W - dw) / 2, oy: (H - dh) / 2, dw, dh };
+        if (cfg.get('video.mirror')) {
+          ctx.save();
+          ctx.translate(W, 0);
+          ctx.scale(-1, 1);
+          ctx.drawImage(video, fit.ox, fit.oy, dw, dh);
+          ctx.restore();
+        } else {
+          ctx.drawImage(video, fit.ox, fit.oy, dw, dh);
+        }
       } else {
-        ctx.drawImage(video, fit.ox, fit.oy, dw, dh);
+        empty = 'hud.noCamera';
       }
+    } else {
+      if (hasScreen) {
+        // The screen is always shown whole, with bars if its shape differs from the canvas.
+        const sc = Math.min(W / screenVideo.videoWidth, H / screenVideo.videoHeight);
+        const dw = screenVideo.videoWidth * sc, dh = screenVideo.videoHeight * sc;
+        ctx.drawImage(screenVideo, (W - dw) / 2, (H - dh) / 2, dw, dh);
+      } else {
+        empty = 'hud.noScreen';
+      }
+      if (source === 'both' && hasVideo) { insetBox = insetRect(); drawInset(); }
+    }
+    if (hasVideo) {
       window.faceTracker.update(video, now);
       window.handTracker.update(video, now);
     }
     ctx.setTransform(S, 0, 0, S, 0, 0);
-    if (!hasVideo) text(t('hud.noCamera'), 640, 352, 14, '#9FB0B5', { ls: 2, align: 'center' });
+    if (empty) text(t(empty), 640, 352, 14, '#9FB0B5', { ls: 2, align: 'center' });
     drawHud(now);
   }
 
@@ -821,6 +968,7 @@
     cfg.build($('tabs'), $('sections'));
     camSel = $('cam');
     micSel = $('mic');
+    screenSel = $('screenSrc');
     const langSel = $('lang');
     window.i18n.apply();
     applyTheme();
@@ -866,6 +1014,12 @@
     micSel.addEventListener('change', async () => { remember('micId', micSel.value); await startAudio(); reportDevices(); });
     navigator.mediaDevices.addEventListener('devicechange', fillDevices);
 
+    // Screen capture source
+    screenSel.addEventListener('change', async () => { remember('screenId', screenSel.value); await startScreen(); reportDevices(); });
+    screenSel.addEventListener('focus', () => { if (!recording) fillScreens(); });
+    if (cfg.get('video.source') !== 'camera') await applySource();
+    else fillScreens().catch(() => {});
+
     const saveProfile = () => {
       info.name = nameIn.value.trim();
       info.topic = topicIn.value.trim();
@@ -910,8 +1064,9 @@
     cfg.onChange((key, value) => {
       if (key.indexOf('look.') === 0) readLook();
       else if (key === 'general.theme') applyTheme();
-      else if (key === 'video.resolution') { applyResolution(); startVideo(); }
-      else if (key === 'video.fps') startVideo();
+      else if (key === 'video.resolution') { applyResolution(); if (cfg.get('video.source') !== 'screen') startVideo(); }
+      else if (key === 'video.fps') { if (cfg.get('video.source') !== 'screen') startVideo(); if (cfg.get('video.source') !== 'camera') startScreen(); }
+      else if (key === 'video.source') applySource();
       else if (key === 'info.city') applyCity();
       else if (key === 'info.feed') applyFeed();
       else if (key === 'info.preset') {
@@ -981,6 +1136,21 @@
       if (e.key === 'Escape') setDrawer(false);
       else if ((e.key === 'm' || e.key === 'M') && tag !== 'INPUT' && tag !== 'SELECT' && tag !== 'TEXTAREA') markChapter();
     });
+
+    // Floating control bar: the window shrinks to a small always-on-top strip. The canvas keeps
+    // drawing while hidden, so the recording is unaffected.
+    const meterFill = $('meter').firstElementChild;
+    let compact = false;
+    const setCompact = async (on) => {
+      compact = on;
+      if (on) setDrawer(false);
+      document.body.classList.toggle('compact', on);
+      try { await window.api.setCompact(on); } catch (e) { /* the page layout still switches */ }
+    };
+    $('compact').addEventListener('click', () => setCompact(!compact));
+    setInterval(() => {
+      if (compact) meterFill.style.width = Math.max(0, Math.min(100, (levelDb + 60) / 60 * 100)) + '%';
+    }, 80);
 
     $('mark').addEventListener('click', markChapter);
     recBtn.addEventListener('click', () => { if (recorder) stopRec(); else startRec(); });

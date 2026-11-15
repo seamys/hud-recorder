@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Screen recording: capture a screen or a window, alone or with the camera as an inset whose
+  position, size and shape can be set. The app hides itself from the capture.
+- Floating control bar: an always-on-top strip with record, timer, level and chapter marker.
+
+### Fixed
+
+- A drive root such as `D:\` can now be chosen as the output folder.
+
 ## [0.5.0] - 2026-11-15
 
 ### Added
