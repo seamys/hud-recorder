@@ -2,13 +2,14 @@
 
 // Main process: window, file output, log numbering, system stats, weather and news.
 
-const { app, BrowserWindow, ipcMain, session, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, session, shell, systemPreferences } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { execFile } = require('child_process');
 const { localDate, dayNumber, logFileName } = require('./lib/dates');
 const { parseFeedTitles } = require('./lib/feed');
 const { NVIDIA_SMI_ARGS, parseNvidiaSmi } = require('./lib/gpu');
+const { createLogger } = require('./lib/logger');
 
 const REFRESH_MS = 10 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 8000;
@@ -17,6 +18,13 @@ let win = null;
 let out = null;       // write stream of the recording in progress
 let outFile = null;
 let gpu = null;       // latest nvidia-smi reading, or null
+let gpuSeen = null;   // last logged availability, so the log records changes only
+
+// Replaced with the file logger once the app is ready and the log folder is known.
+let log = { info() {}, warn() {}, error() {}, dir: '', file: '' };
+
+process.on('uncaughtException', (err) => log.error('uncaughtException', err));
+process.on('unhandledRejection', (err) => log.error('unhandledRejection', err));
 
 // ---------- storage ----------
 
@@ -64,6 +72,10 @@ function logInfo() {
 function pollGpu() {
   execFile('nvidia-smi', NVIDIA_SMI_ARGS, { windowsHide: true, timeout: 1500 }, (err, stdout) => {
     gpu = err ? null : parseNvidiaSmi(stdout);
+    if (!!gpu !== gpuSeen) {
+      gpuSeen = !!gpu;
+      log.info(gpu ? 'nvidia-smi available, GPU stats enabled' : 'nvidia-smi unavailable, GPU stats hidden');
+    }
   });
 }
 
@@ -109,6 +121,7 @@ async function refreshWeather() {
     env.weatherError = null;
   } catch (e) {
     env.weatherError = e.message;
+    log.warn('weather refresh failed:', e.message);
   }
 }
 
@@ -127,6 +140,7 @@ async function refreshNews() {
   } catch (e) {
     env.news = [];
     env.newsError = e.message;
+    log.warn('news refresh failed:', e.message);
   }
 }
 
@@ -148,6 +162,8 @@ ipcMain.handle('rec:start', (e, ext) => {
   fs.mkdirSync(outDir(), { recursive: true });
   outFile = path.join(outDir(), logFileName(ix.count + 1, ext));
   out = fs.createWriteStream(outFile);
+  out.on('error', (err) => log.error('output stream error', err));
+  log.info('recording started:', outFile);
   return outFile;
 });
 
@@ -173,6 +189,9 @@ ipcMain.handle('rec:stop', () => new Promise((resolve) => {
       topic: ix.topic || ''
     });
     writeIndex(ix);
+    let bytes = 0;
+    try { bytes = fs.statSync(file).size; } catch (e) { /* size is informational */ }
+    log.info('recording saved:', file, '(' + bytes + ' bytes)');
     resolve({ file });
   });
 }));
@@ -185,6 +204,7 @@ ipcMain.handle('rec:abort', () => new Promise((resolve) => {
     out = null;
     outFile = null;
     try { fs.unlinkSync(file); } catch (e) { /* nothing to clean up */ }
+    log.warn('recording aborted before it started:', file);
     resolve(true);
   });
 }));
@@ -246,6 +266,17 @@ ipcMain.handle('env:setFeed', async (e, url) => {
   return { ok: !env.newsError, error: env.newsError, count: env.news.length };
 });
 
+// Messages from the page (device failures, script errors) go to the same log file.
+ipcMain.handle('log:write', (e, level, message) => {
+  const text = String(message || '').slice(0, 2000);
+  if (level === 'error') log.error('[renderer]', text);
+  else if (level === 'warn') log.warn('[renderer]', text);
+  else log.info('[renderer]', text);
+  return true;
+});
+
+ipcMain.handle('open:logs', () => shell.openPath(log.dir));
+
 ipcMain.handle('open:dir', () => {
   fs.mkdirSync(outDir(), { recursive: true });
   return shell.openPath(outDir());
@@ -262,6 +293,7 @@ function createWindow() {
     backgroundColor: '#070A0C',
     autoHideMenuBar: true,
     title: 'HUD Recorder',
+    icon: path.join(__dirname, '..', '..', 'build', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload', 'preload.js'),
       contextIsolation: true,
@@ -271,9 +303,28 @@ function createWindow() {
     }
   });
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+  win.webContents.on('render-process-gone', (e, details) => log.error('renderer process gone:', details.reason));
 }
 
-app.whenReady().then(() => {
+// macOS asks for camera and microphone access per app; request both up front so the
+// system prompts appear before the first capture attempt.
+async function requestMediaAccess() {
+  if (process.platform !== 'darwin') return;
+  for (const kind of ['camera', 'microphone']) {
+    try {
+      const granted = await systemPreferences.askForMediaAccess(kind);
+      log.info('macOS ' + kind + ' access:', granted ? 'granted' : 'denied');
+    } catch (e) {
+      log.warn('macOS ' + kind + ' access request failed:', e.message);
+    }
+  }
+}
+
+app.whenReady().then(async () => {
+  log = createLogger(app.getPath('logs'));
+  log.info('HUD Recorder ' + app.getVersion() + ' starting on ' + process.platform + ' ' + process.arch +
+    ', Electron ' + process.versions.electron + ', locale ' + app.getLocale());
+
   // The app only ever needs camera and microphone access.
   session.defaultSession.setPermissionRequestHandler((wc, permission, cb) => cb(permission === 'media'));
   session.defaultSession.setPermissionCheckHandler((wc, permission) => permission === 'media');
@@ -285,12 +336,18 @@ app.whenReady().then(() => {
   setInterval(refreshWeather, REFRESH_MS);
   setInterval(refreshNews, REFRESH_MS);
 
+  await requestMediaAccess();
   createWindow();
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
 });
 
 app.on('window-all-closed', () => {
   if (out) {
     try { out.end(); } catch (e) { /* already closed */ }
   }
+  log.info('window closed, quitting');
   app.quit();
 });

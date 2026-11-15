@@ -13,7 +13,7 @@
   const FRAME_MS = 15.5;              // draw at ~60 fps even on high refresh rate displays
   const NEWS_SLOT_MS = 8000;          // how long each headline stays on screen
   const FG = '#E8F1F2', DIM = '#B8C7CB', AC = '#6FE3E1', REC = '#FF8A4C';
-  const MONO = '"Cascadia Mono","JetBrains Mono",Consolas,"Microsoft YaHei",monospace';
+  const MONO = '"Cascadia Mono","JetBrains Mono","SF Mono",Menlo,Consolas,"Microsoft YaHei","PingFang SC",monospace';
 
   // ---------- elements and state ----------
 
@@ -44,6 +44,13 @@
     return known === 'errors.' + e ? String(e) : known;
   };
 
+  // Diagnostics go to the app log file via the main process; failures here are ignored.
+  function logLine(level, message) {
+    try { window.api.logWrite(level, message); } catch (e) { /* logging is best effort */ }
+  }
+  window.addEventListener('error', (e) => logLine('error', (e.message || 'error') + ' @ ' + (e.filename || '') + ':' + (e.lineno || 0)));
+  window.addEventListener('unhandledrejection', (e) => logLine('error', 'unhandled rejection: ' + (e.reason && e.reason.message ? e.reason.message : String(e.reason))));
+
   function setStatus(key, vars) {
     lastStatus = { key, vars };
     statusEl.textContent = t(key, vars);
@@ -57,7 +64,10 @@
 
   async function getStream(constraints) {
     try { return await navigator.mediaDevices.getUserMedia(constraints); }
-    catch (e) { return null; }
+    catch (e) {
+      logLine('warn', 'getUserMedia failed for ' + (constraints.video ? 'camera' : 'microphone') + ': ' + e.name + ': ' + e.message);
+      return null;
+    }
   }
 
   function stopTracks(s) { if (s) s.getTracks().forEach((tr) => tr.stop()); }
@@ -156,6 +166,7 @@
       const opts = { videoBitsPerSecond: BITRATE, audioBitsPerSecond: 192000 };
       if (mime) opts.mimeType = mime;
       recorder = new MediaRecorder(out, opts);
+      logLine('info', 'recorder format: ' + (recorder.mimeType || mime || 'default') + ', audio track: ' + (at ? 'yes' : 'no'));
 
       // Chunks are written strictly in order: each write waits for the previous one.
       chain = Promise.resolve();
@@ -188,6 +199,7 @@
       recording = false;
       setRecordingUi(false);
       setStatus('status.startError', { error: err.message });
+      logLine('error', 'could not start recording: ' + err.message);
     }
     recBtn.disabled = false;
   }
@@ -402,6 +414,9 @@
     if (has(camSel, savedCam) && camSel.value !== savedCam) { camSel.value = savedCam; await startVideo(); }
     if (has(micSel, savedMic) && micSel.value !== savedMic) { micSel.value = savedMic; await startAudio(); }
     reportDevices();
+    const label = (sel) => (sel.selectedOptions[0] ? sel.selectedOptions[0].textContent : 'none');
+    logLine('info', 'camera: ' + (videoStream ? label(camSel) + ' ' + video.videoWidth + 'x' + video.videoHeight : 'none') +
+      ', microphone: ' + (audioStream ? label(micSel) : 'none'));
 
     camSel.addEventListener('change', async () => { remember('camId', camSel.value); await startVideo(); reportDevices(); });
     micSel.addEventListener('change', async () => { remember('micId', micSel.value); await startAudio(); reportDevices(); });
@@ -436,6 +451,7 @@
       else setStatus('status.feedFail', { error: errorText(res.error) });
     });
     pollEnv();
+    setTimeout(pollEnv, 4000);       // pick up the first weather and news fetch soon after launch
     setInterval(pollEnv, 30000);
 
     // Language
@@ -473,6 +489,7 @@
 
     recBtn.addEventListener('click', () => { if (recorder) stopRec(); else startRec(); });
     $('open').addEventListener('click', () => window.api.openDir());
+    $('logs').addEventListener('click', () => window.api.openLogs());
 
     const poll = async () => { try { stats = await window.api.sysStats(); } catch (e) { /* keep the last reading */ } };
     poll();

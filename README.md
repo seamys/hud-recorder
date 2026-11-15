@@ -1,6 +1,19 @@
-# HUD Recorder
+<p align="center">
+  <img src="build/icon.png" width="112" alt="HUD Recorder logo">
+</p>
 
-A video log recorder for Windows that burns a sci-fi style heads-up display into the recording.
+<h1 align="center">HUD Recorder</h1>
+
+<p align="center">
+  <a href="https://github.com/seamys/hud-recorder/actions/workflows/ci.yml"><img src="https://github.com/seamys/hud-recorder/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/seamys/hud-recorder/releases"><img src="https://img.shields.io/github/v/release/seamys/hud-recorder?include_prereleases&label=release" alt="Latest release"></a>
+  <a href="https://github.com/seamys/hud-recorder/releases"><img src="https://img.shields.io/github/downloads/seamys/hud-recorder/total" alt="Downloads"></a>
+  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS-6FE3E1" alt="Platform: Windows and macOS">
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/seamys/hud-recorder" alt="License"></a>
+  <a href="https://seamys.github.io/hud-recorder/"><img src="https://img.shields.io/badge/website-online-FF8A4C" alt="Website"></a>
+</p>
+
+A video log recorder for Windows and macOS that burns a sci-fi style heads-up display into the recording.
 Think of the telemetry overlay on a rocket launch stream, or a mission log in a science fiction
 film, driven by real data from your own machine.
 
@@ -24,14 +37,31 @@ recorded, so the preview is exactly what ends up in the file.
 - **English and Simplified Chinese** interface and HUD, switchable in settings.
 - **MP4 (H.264) output** when the system supports it, with WebM as a fallback.
 
-## Requirements
+## Download
 
-- Windows 10 or 11
-- [Node.js](https://nodejs.org) 20 or newer
-- A camera and a microphone
-- Optional: an NVIDIA GPU with drivers installed, for the GPU readouts
+Installers for Windows and macOS are on the
+[Releases page](https://github.com/seamys/hud-recorder/releases). The project website is at
+<https://seamys.github.io/hud-recorder/>.
 
-## Getting started
+The builds are not code signed yet:
+
+- **Windows**: on the SmartScreen prompt choose "More info", then "Run anyway".
+- **macOS**: right-click the app, choose "Open", then confirm. Allow camera and microphone
+  access when asked.
+
+## Platform support
+
+| Platform | Status |
+| --- | --- |
+| Windows 10 and 11 | Developed and tested here |
+| macOS (Intel and Apple silicon) | Supported in code and built by CI, but not yet tested on real hardware. Reports welcome |
+| Linux | Not supported yet |
+
+GPU readouts need an NVIDIA GPU with `nvidia-smi` available, so they are hidden on Macs.
+
+## Running from source
+
+Requirements: [Node.js](https://nodejs.org) 20 or newer, a camera and a microphone.
 
 ```bash
 git clone https://github.com/seamys/hud-recorder.git
@@ -41,7 +71,7 @@ npm start
 ```
 
 On Windows you can also double-click `start.bat`, which installs dependencies on first run and
-then starts the app.
+then starts the app. On macOS, the system asks for camera and microphone access the first time.
 
 ## Usage
 
@@ -52,16 +82,30 @@ then starts the app.
    apply it.
 3. Press the round button to start recording and again to stop.
 
-Recordings are saved to `Videos\HUD-Logs`. The folder icon in the bar opens it.
+Recordings are saved to `Videos\HUD-Logs` on Windows and `Movies/HUD-Logs` on macOS. The folder
+icon in the bar opens it.
 
 ### Where settings are stored
 
 | What | Where |
 | --- | --- |
-| Name, topic, city, feed URL, log counter and log list | `Videos\HUD-Logs\index.json` |
+| Name, topic, city, feed URL, log counter and log list | `index.json` in the `HUD-Logs` folder |
 | Chosen camera, microphone and language | The app's local storage |
 
 Delete `index.json` to reset the log counter and the day counter.
+
+## Troubleshooting
+
+The app writes a diagnostics log: startup details, camera and microphone failures, recording
+start and stop, and network errors. It does not contain your name, topic or any audio or video.
+
+Open it from **Settings → Open app log folder** and attach `main.log` when you report a problem.
+
+Common cases:
+
+- **"No camera detected" with a camera plugged in**: another program is probably using it.
+  Close OBS, video call apps or the camera vendor's webcam utility and reselect the camera.
+- **The video has no sound**: check that the right microphone is selected in Settings.
 
 ## Privacy and network access
 
@@ -87,11 +131,13 @@ Open-Meteo is free for non-commercial use; see their terms if you plan to use th
 ```
 src/
   main/        Main process: window, file output, log index, GPU stats, weather, news
-    lib/       Pure helpers with unit tests (dates, feed parsing, nvidia-smi parsing)
+    lib/       Pure helpers with unit tests (dates, feed parsing, nvidia-smi parsing, logger)
   preload/     The IPC bridge exposed to the page as window.api
   renderer/    The page: capture, HUD drawing, recording, i18n, styles
 test/          Unit tests (node:test, no dependencies)
-docs/          Architecture notes
+build/         App icon used by the installers
+site/          The project website, published with GitHub Pages
+docs/          Architecture and release notes
 ```
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the pieces fit together.
@@ -101,7 +147,10 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the pieces fit together
 ```bash
 npm start      # run the app
 npm test       # run the unit tests
+npm run dist   # build an installer for the current platform into dist/
 ```
+
+Releases are built by GitHub Actions; see [docs/RELEASING.md](docs/RELEASING.md).
 
 The HUD is drawn in `drawHud()` in `src/renderer/renderer.js`, on a 1280x720 design grid that is
 scaled to 1080p. Strings live in `src/renderer/i18n.js`.
@@ -113,14 +162,14 @@ scaled to 1080p. Strings live in `src/renderer/i18n.js`.
 - [ ] **Stage 2**: speaker analysis: face tracking frame, head pose, eye contact, speaking rate
 - [ ] **Stage 3**: live captions, keyword callouts, chapter markers
 - [ ] **Stage 4**: screen recording mode with a camera inset
-- [ ] **Stage 5**: FFmpeg/NVENC encoding option, HUD themes, packaged installer
+- [ ] **Stage 5**: FFmpeg/NVENC encoding option, HUD themes, signed installers
 
 ## Known limitations
 
-- Windows only for now. macOS and Linux are untested.
+- macOS support has not been tested on real hardware yet. Linux is not supported.
 - The recorder relies on Chromium's built-in encoder. Whether it uses hardware encoding depends
   on your GPU and drivers.
-- There is no packaged installer yet; the app runs from source.
+- Installers are not code signed, so Windows and macOS show a warning on first launch.
 - Keep the window open while recording. Minimising is fine; closing stops the recording.
 
 ## Contributing

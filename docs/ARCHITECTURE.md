@@ -57,6 +57,12 @@ is hidden.
 | Headlines | The configured RSS or Atom feed | 10 min |
 | Audio level and spectrum | Web Audio `AnalyserNode` | Every frame |
 
+## Logging
+
+`src/main/lib/logger.js` appends timestamped lines to `main.log` in Electron's log folder and
+keeps one rotated file. The page forwards device failures and script errors over the `log:write`
+IPC channel, so one file covers both processes. Names, topics and media are never logged.
+
 ## Testing
 
 Logic that does not depend on Electron lives in `src/main/lib/` and is covered by `node:test`

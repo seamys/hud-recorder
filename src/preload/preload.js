@@ -15,5 +15,7 @@ contextBridge.exposeInMainWorld('api', {
   envGet: () => ipcRenderer.invoke('env:get'),
   setCity: (name, lang) => ipcRenderer.invoke('env:setCity', name, lang),
   setFeed: (url) => ipcRenderer.invoke('env:setFeed', url),
-  openDir: () => ipcRenderer.invoke('open:dir')
+  openDir: () => ipcRenderer.invoke('open:dir'),
+  openLogs: () => ipcRenderer.invoke('open:logs'),
+  logWrite: (level, message) => ipcRenderer.invoke('log:write', level, message)
 });

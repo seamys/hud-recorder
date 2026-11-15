@@ -26,6 +26,7 @@
         rssPh: 'https://… Leave empty to hide',
         hint: 'Press Enter to apply. Weather refreshes every 10 minutes.',
         language: 'Language',
+        openLogs: 'Open app log folder (for bug reports)',
         cameraN: 'Camera {n}',
         microphoneN: 'Microphone {n}'
       },
@@ -112,6 +113,7 @@
         rssPh: 'https://…，留空则不显示新闻',
         hint: '修改后按回车生效。天气每 10 分钟更新一次。',
         language: '语言',
+        openLogs: '打开程序日志文件夹（反馈问题时使用）',
         cameraN: '摄像头 {n}',
         microphoneN: '麦克风 {n}'
       },

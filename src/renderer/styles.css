@@ -17,7 +17,7 @@ html, body {
   height: 100%;
   background: var(--bg);
   color: var(--fg);
-  font-family: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  font-family: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", sans-serif;
   font-size: 13px;
 }
 
@@ -149,6 +149,19 @@ canvas { display: block; width: 100%; height: 100%; object-fit: contain; }
 .f input:focus, .f select:focus { border-color: var(--ac); outline: none; }
 .f select:disabled { opacity: .5; }
 .hint { font-size: 11px; color: #8A9BA1; line-height: 1.5; }
+.link {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dim);
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.link:hover { color: var(--fg); }
 hr { width: 100%; border: 0; border-top: 1px solid var(--line); margin: 2px 0; }
 
 :focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; }

@@ -1,11 +1,22 @@
 {
   "name": "hud-recorder",
-  "version": "0.1.0",
-  "description": "Video log recorder for Windows that burns a sci-fi style HUD overlay into the recording.",
+  "version": "0.2.0",
+  "description": "Video log recorder for Windows and macOS that burns a sci-fi style HUD overlay into the recording.",
   "main": "src/main/main.js",
+  "author": "seamys",
+  "license": "MIT",
+  "homepage": "https://seamys.github.io/hud-recorder/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/seamys/hud-recorder.git"
+  },
+  "bugs": {
+    "url": "https://github.com/seamys/hud-recorder/issues"
+  },
   "scripts": {
     "start": "electron .",
-    "test": "node --test \"test/*.test.js\""
+    "test": "node --test \"test/*.test.js\"",
+    "dist": "electron-builder"
   },
   "keywords": [
     "electron",
@@ -16,11 +27,57 @@
     "overlay",
     "telemetry"
   ],
-  "license": "MIT",
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
-    "electron": "^45.0.0"
+    "electron": "^45.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "io.github.seamys.hudrecorder",
+    "productName": "HUD Recorder",
+    "files": [
+      "src/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "category": "public.app-category.video",
+      "extendInfo": {
+        "NSCameraUsageDescription": "HUD Recorder records video from your camera.",
+        "NSMicrophoneUsageDescription": "HUD Recorder records audio from your microphone."
+      }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "seamys",
+        "repo": "hud-recorder",
+        "releaseType": "draft"
+      }
+    ]
   }
 }
