@@ -8,7 +8,7 @@
   const DETECT_INTERVAL_MS = 33;      // analyse at most ~30 times per second
   const EYE_CONTACT_TAU_S = 20;       // smoothing window for the eye contact percentage
   const GAZE_X_LIMIT = 0.3;           // iris further than this from the eye centre (in half eye widths) is a side glance
-  const GAZE_Y_LIMIT = 0.5;           // eye-look up/down blendshape score above this is a vertical glance
+  const GAZE_Y_LIMIT = 0.35;          // eye-look up/down blendshape score above this is a vertical glance
   const HEAD_TURN_LIMIT = 0.4;        // nose further than this from the face centre (in half face widths) is a turned head
   const BLINK_LIMIT = 0.5;            // eye-blink blendshape score above this counts as closed
   const BLINK_WINDOW_MS = 60000;
