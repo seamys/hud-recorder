@@ -25,7 +25,8 @@ recorded, so the preview is exactly what ends up in the file.
 ## Features
 
 - **Screen recording** (new and still being tested): record a screen or a window, alone or
-  with the camera as an inset in a corner, rectangular or round.
+  with the camera as an inset in a corner: 16:9, 4:3, square or round, optionally with rounded
+  corners.
 - **Floating control bar**: shrink the window to a small always-on-top strip with the record
   button, timer, microphone level and chapter marker, for controlling a recording while you
   work in other apps.
@@ -45,7 +46,8 @@ recorded, so the preview is exactly what ends up in the file.
   speaking rate readout and keyword callouts for words you choose.
 - **Chapter markers**: press the flag button or `M` while recording. The chapter list is saved
   as a text file next to the video, in the format video sites accept.
-- **Full control in Settings**: resolution (720p to 4K), frame rate, video and audio bitrate,
+- **Full control in Settings**: resolution (720p to 4K), frame rate (30 to 240; 120 and 240 need a
+  matching high-refresh monitor and are limited to 1080p), video and audio bitrate,
   file format, camera mirroring and framing; a switch for every HUD element; accent, text and
   recording colours, opacity and typeface; units; caption size and timing.
 - **Environment panel**: location, weather, humidity, wind, air quality, sunrise and sunset for a

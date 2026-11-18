@@ -13,6 +13,7 @@
     'video.insetPos': 'br',
     'video.insetSize': 24,
     'video.insetShape': 'rect',
+    'video.insetRound': false,
     'video.resolution': '1080p',
     'video.fps': 60,
     'video.bitrate': 8,
@@ -117,15 +118,17 @@
           { v: 'br', k: 'set.posBR' }, { v: 'bl', k: 'set.posBL' }, { v: 'tr', k: 'set.posTR' }, { v: 'tl', k: 'set.posTL' }] },
         { type: 'range', key: 'video.insetSize', label: 'set.insetSize', min: 12, max: 45, step: 1, unit: '%' },
         { type: 'select', key: 'video.insetShape', label: 'set.insetShape', options: [
-          { v: 'rect', k: 'set.shapeRect' }, { v: 'circle', k: 'set.shapeCircle' }] },
+          { v: 'rect', k: 'set.shapeRect' }, { v: 'rect43', k: 'set.shapeRect43' },
+          { v: 'square', k: 'set.shapeSquare' }, { v: 'circle', k: 'set.shapeCircle' }] },
+        toggle('video.insetRound', 'set.insetRound'),
         { type: 'group', label: 'set.groupQuality' },
         { type: 'select', key: 'video.resolution', label: 'set.resolution', lock: true, options: [
           { v: '720p', text: '720p · 1280 × 720' },
           { v: '1080p', text: '1080p · 1920 × 1080' },
           { v: '1440p', text: '1440p · 2560 × 1440' },
           { v: '2160p', text: '4K · 3840 × 2160' }] },
-        { type: 'select', key: 'video.fps', label: 'set.fps', lock: true, num: true, options: [
-          { v: 30, text: '30 FPS' }, { v: 60, text: '60 FPS' }] },
+        { type: 'select', key: 'video.fps', label: 'set.fps', lock: true, num: true, hint: 'set.fpsHint', options: [
+          { v: 30, text: '30 FPS' }, { v: 60, text: '60 FPS' }, { v: 120, text: '120 FPS' }, { v: 240, text: '240 FPS' }] },
         { type: 'range', key: 'video.bitrate', label: 'set.bitrate', lock: true, min: 2, max: 40, step: 1, unit: ' Mbps', hint: 'set.bitrateHint' },
         { type: 'select', key: 'video.audio', label: 'set.audio', lock: true, num: true, options: [
           { v: 128, text: '128 kbps' }, { v: 192, text: '192 kbps' }, { v: 256, text: '256 kbps' }, { v: 320, text: '320 kbps' }] },

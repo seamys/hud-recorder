@@ -11,6 +11,8 @@
 
   const RESOLUTIONS = { '720p': [1280, 720], '1080p': [1920, 1080], '1440p': [2560, 1440], '2160p': [3840, 2160] };
   const CHIP_MS = 4500;
+  const FPS_CHOICES = [30, 60, 120, 240];
+  const HIGH_RES = ['1440p', '2160p'];         // not offered together with 120 or 240 FPS
   const FONTS = {
     mono: '"Cascadia Mono","JetBrains Mono","SF Mono",Menlo,Consolas,"Microsoft YaHei","PingFang SC",monospace',
     sans: '"Segoe UI Variable Text","Segoe UI","Microsoft YaHei","PingFang SC",sans-serif'
@@ -48,7 +50,8 @@
   let info = { number: 1, day: 1, dir: '', name: '', topic: '', city: '', rss: '' };
   let stats = { freeBytes: null, gpu: null };
   let env = { city: '', weather: null, news: [], newsError: null };
-  let fps = 60, lastT = performance.now();
+  let fps = 60, lastT = performance.now(), nextDue = 0;
+  let recFrames = 0, lastRecFps = null;  // frames drawn while recording, for the saved-file report
   let levelDb = -60, peakDb = -60, peakHold = 0;
   let talkRatio = 0, voicedHold = 0;    // share of recent time with voice activity
   let fit = { ox: 0, oy: 0, dw: W, dh: H };   // where the camera frame sits on the canvas
@@ -118,7 +121,10 @@
     if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
   }
 
-  const frameMs = () => 1000 / (cfg.get('video.fps') === 30 ? 30 : 60) - 1.2;
+  function fpsTarget() {
+    const v = Number(cfg.get('video.fps'));
+    return FPS_CHOICES.indexOf(v) >= 0 ? v : 60;
+  }
   const show = (k) => !!cfg.get('hud.' + k);
   function alpha(x) { ctx.globalAlpha = A * x; }
 
@@ -202,7 +208,7 @@
       logLine('warn', 'screen capture: the source list is empty');
       return;
     }
-    const rate = cfg.get('video.fps') === 30 ? 30 : 60;
+    const rate = fpsTarget();
     try {
       // Preferred path: the main process answers this request with the chosen source.
       await window.api.selectScreen(id);
@@ -226,6 +232,32 @@
     logLine('info', 'screen capture started: ' + (screenSel.selectedOptions[0] ? screenSel.selectedOptions[0].textContent : id));
   }
 
+  // Frames actually arriving from a source, counted with requestVideoFrameCallback. Falls back to
+  // the rate the device reports when no measurement is available.
+  function frameMeter(el) {
+    const m = { fps: 0, count: 0, since: 0, last: 0 };
+    if (!el.requestVideoFrameCallback) return m;
+    const tick = (now) => {
+      if (!m.since || now - m.last > 1500) { m.since = now; m.count = 0; }
+      m.count++;
+      m.last = now;
+      if (now - m.since >= 1000) { m.fps = (m.count - 1) * 1000 / (now - m.since); m.count = 1; m.since = now; }
+      el.requestVideoFrameCallback(tick);
+    };
+    el.requestVideoFrameCallback(tick);
+    return m;
+  }
+  const camMeter = frameMeter(video);
+  const screenMeter = frameMeter(screenVideo);
+
+  function sourceFps(m, el) {
+    if (!el.srcObject) return null;
+    if (m.fps && performance.now() - m.last < 1500) return m.fps;
+    const tr = el.srcObject.getVideoTracks ? el.srcObject.getVideoTracks()[0] : null;
+    const st = tr && tr.getSettings ? tr.getSettings() : {};
+    return st.frameRate || null;
+  }
+
   // Start and stop the camera and the screen capture to match the chosen picture source.
   async function applySource() {
     const source = cfg.get('video.source');
@@ -242,8 +274,10 @@
   // bottom bands.
   function insetRect() {
     const size = Math.max(12, Math.min(45, Number(cfg.get('video.insetSize')) || 24)) / 100;
+    // Every shape has the same height for a given size, so switching shape keeps the scale.
     const h = 1280 * size * 9 / 16;
-    const w = cfg.get('video.insetShape') === 'circle' ? h : 1280 * size;
+    const shape = cfg.get('video.insetShape');
+    const w = shape === 'circle' || shape === 'square' ? h : shape === 'rect43' ? h * 4 / 3 : h * 16 / 9;
     const pos = String(cfg.get('video.insetPos') || 'br');
     return { x: pos[1] === 'l' ? 76 : 1216 - w, y: pos[0] === 't' ? 116 : 664 - h, w, h };
   }
@@ -261,6 +295,7 @@
     const outline = () => {
       ctx.beginPath();
       if (circle) ctx.arc(rx + rw / 2, ry + rh / 2, rw / 2, 0, Math.PI * 2);
+      else if (cfg.get('video.insetRound') && ctx.roundRect) ctx.roundRect(rx, ry, rw, rh, Math.min(rw, rh) * 0.12);
       else ctx.rect(rx, ry, rw, rh);
     };
     const sc = Math.max(rw / video.videoWidth, rh / video.videoHeight);
@@ -452,7 +487,7 @@
     try {
       const mime = pickMime();
       const ext = mime.indexOf('video/mp4') === 0 ? 'mp4' : 'webm';
-      const out = cv.captureStream(cfg.get('video.fps') === 30 ? 30 : 60);
+      const out = cv.captureStream(fpsTarget());
       const at = audioStream && audioStream.getAudioTracks()[0];
       if (at) out.addTrack(at);
       const file = await window.api.recStart(ext);
@@ -481,12 +516,15 @@
         recorder = null;
         setRecordingUi(false);
         recBtn.disabled = false;
-        setStatus('status.saved', { file: r.file });
+        if (lastRecFps === null) setStatus('status.saved', { file: r.file });
+        else setStatus('status.savedFps', { file: r.file, fps: Math.round(lastRecFps) });
       };
 
       recorder.start(1000);
       marks = [];
       cues = [];
+      recFrames = 0;
+      lastRecFps = null;
       recording = true;
       recStart = performance.now();
       setRecordingUi(true);
@@ -506,6 +544,12 @@
   function stopRec() {
     if (!recorder) return;
     recBtn.disabled = true;
+    // Report what was actually produced, so a high frame rate setting can be checked.
+    const secs = Math.max(0.001, (performance.now() - recStart) / 1000);
+    lastRecFps = recFrames / secs;
+    const src = (m, el) => { const v = sourceFps(m, el); return v === null ? 'none' : v.toFixed(1); };
+    logLine('info', 'recording stats: target ' + fpsTarget() + ' fps, drawn ' + lastRecFps.toFixed(1) +
+      ' fps average over ' + secs.toFixed(1) + ' s, camera source ' + src(camMeter, video) + ' fps, screen source ' + src(screenMeter, screenVideo) + ' fps');
     recording = false;
     recorder.stop();
   }
@@ -709,7 +753,8 @@
     // Top right: timecode and wall clock
     if (show('timecode')) {
       const el = recording ? (now - recStart) / 1000 : 0;
-      const tc = pad(el / 3600) + ':' + pad((el / 60) % 60) + ':' + pad(el % 60) + ':' + pad((el * 60) % 60);
+      const rate = fpsTarget();
+      const tc = pad(el / 3600) + ':' + pad((el / 60) % 60) + ':' + pad(el % 60) + ':' + pad((el * rate) % rate, rate > 99 ? 3 : 2);
       text(tc, 1220, 50, 26, FG, { weight: 500, ls: 2, align: 'right' });
     }
     if (show('clock')) {
@@ -741,7 +786,12 @@
       const source = cfg.get('video.source');
       if (show('devCamera') && source !== 'camera') rows.push([t('hud.screen'), screenVideo.videoWidth ? screenVideo.videoWidth + ' × ' + screenVideo.videoHeight : t('hud.notConnected')]);
       if (show('devCamera') && source !== 'screen') rows.push([t('hud.camera'), vw ? vw + ' × ' + vh : t('hud.notConnected')]);
-      if (show('devFps')) rows.push([t('hud.fps'), Math.round(fps) + ' FPS']);
+      if (show('devFps')) {
+        const fmt = (v) => (v === null ? t('hud.notConnected') : Math.round(v) + ' FPS');
+        rows.push([t('hud.fps'), Math.round(fps) + ' FPS']);
+        if (source !== 'screen') rows.push([t('hud.camFps'), fmt(sourceFps(camMeter, video))]);
+        if (source !== 'camera') rows.push([t('hud.screenFps'), fmt(sourceFps(screenMeter, screenVideo))]);
+      }
       if (show('devStorage') && stats.freeBytes != null) rows.push([t('hud.storage'), (stats.freeBytes / 1073741824).toFixed(0) + ' GB']);
       if (show('devGpu') && stats.gpu) {
         rows.push([t('hud.gpu'), Math.round(stats.gpu.util) + '% · ' + Math.round(stats.gpu.temp) + '°C']);
@@ -905,7 +955,11 @@
 
   function draw(now) {
     requestAnimationFrame(draw);
-    if (now - lastT < frameMs()) return;
+    // Pace drawing to the chosen frame rate. requestAnimationFrame runs at the monitor's refresh
+    // rate, so the effective rate can never exceed what the monitor shows.
+    const interval = 1000 / fpsTarget();
+    if (now < nextDue - 1) return;
+    nextDue = now - nextDue > interval ? now + interval : nextDue + interval;
     const dt = Math.max(0.001, (now - lastT) / 1000);
     lastT = now;
     fps += ((1 / dt) - fps) * 0.05;
@@ -957,6 +1011,7 @@
     ctx.setTransform(S, 0, 0, S, 0, 0);
     if (empty) text(t(empty), 640, 352, 14, '#9FB0B5', { ls: 2, align: 'center' });
     drawHud(now);
+    if (recording) recFrames++;
   }
 
   // ---------- startup ----------
@@ -973,6 +1028,7 @@
     window.i18n.apply();
     applyTheme();
     readLook();
+    if (fpsTarget() > 60 && HIGH_RES.indexOf(cfg.get('video.resolution')) >= 0) cfg.sync('video.resolution', '1080p');
     applyResolution();
     readKeywords();
     setRecordingUi(false);
@@ -1064,8 +1120,21 @@
     cfg.onChange((key, value) => {
       if (key.indexOf('look.') === 0) readLook();
       else if (key === 'general.theme') applyTheme();
-      else if (key === 'video.resolution') { applyResolution(); if (cfg.get('video.source') !== 'screen') startVideo(); }
-      else if (key === 'video.fps') { if (cfg.get('video.source') !== 'screen') startVideo(); if (cfg.get('video.source') !== 'camera') startScreen(); }
+      else if (key === 'video.resolution') {
+        if (HIGH_RES.indexOf(value) >= 0 && fpsTarget() > 60) { cfg.sync('video.fps', 60); setStatus('status.fpsResLimited'); }
+        applyResolution();
+        if (cfg.get('video.source') !== 'screen') startVideo();
+        if (cfg.get('video.source') !== 'camera') startScreen();
+      }
+      else if (key === 'video.fps') {
+        if (Number(value) > 60 && HIGH_RES.indexOf(cfg.get('video.resolution')) >= 0) {
+          cfg.sync('video.resolution', '1080p');
+          applyResolution();
+          setStatus('status.fpsResLimited');
+        }
+        if (cfg.get('video.source') !== 'screen') startVideo();
+        if (cfg.get('video.source') !== 'camera') startScreen();
+      }
       else if (key === 'video.source') applySource();
       else if (key === 'info.city') applyCity();
       else if (key === 'info.feed') applyFeed();

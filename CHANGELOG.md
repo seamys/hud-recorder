@@ -11,6 +11,10 @@ All notable changes to this project are documented here. The format follows
 - Screen recording: capture a screen or a window, alone or with the camera as an inset whose
   position, size and shape can be set. The app hides itself from the capture.
 - Floating control bar: an always-on-top strip with record, timer, level and chapter marker.
+- 120 and 240 FPS recording, limited to 1080p and to what the monitor refreshes at.
+- The HUD shows the frame rate each source actually delivers next to the render rate, and the
+  status line and log report the average frame rate of each saved recording.
+- Camera inset shapes: 16:9, 4:3, square and circle, with optional rounded corners.
 
 ### Fixed
 
